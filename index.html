@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<title>訓練紀錄本</title>
+<meta name="theme-color" content="#1c1917" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black" />
+<meta name="apple-mobile-web-app-title" content="訓練紀錄本" />
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<link rel="icon" href="icon-192.png" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+  body { font-family: 'IBM Plex Sans', sans-serif; -webkit-tap-highlight-color: transparent; }
+  .font-display { font-family: 'Space Grotesk', sans-serif; }
+  .font-mono2 { font-family: 'IBM Plex Mono', monospace; }
+  input, textarea { font-family: inherit; }
+</style>
+</head>
+<body class="bg-stone-50 text-stone-900 min-h-screen pb-24">
+
+<div class="bg-stone-900 text-stone-50 px-5 pt-6 pb-5 sticky top-0 z-20">
+  <div class="flex items-center gap-2">
+    <i data-lucide="dumbbell" class="text-lime-400" style="width:22px;height:22px"></i>
+    <h1 class="font-display text-xl font-bold tracking-tight">訓練紀錄本</h1>
+  </div>
+  <p class="text-stone-400 text-xs mt-1">即時記錄每位學生的每一組訓練</p>
+</div>
+
+<div id="toast" class="fixed top-3 left-1/2 -translate-x-1/2 z-50 bg-stone-900 text-lime-300 text-sm px-4 py-2 rounded-full shadow-lg font-mono2 hidden"></div>
+
+<div id="app"></div>
+
+<div class="fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 flex justify-around py-2 z-30">
+  <button onclick="setTab('log')" id="nav-log" class="nav-btn flex flex-col items-center gap-1 px-4 py-1 rounded-lg">
+    <i data-lucide="plus" style="width:20px;height:20px"></i>
+    <span class="text-[11px] font-medium">新增紀錄</span>
+  </button>
+  <button onclick="setTab('history')" id="nav-history" class="nav-btn flex flex-col items-center gap-1 px-4 py-1 rounded-lg">
+    <i data-lucide="clipboard-list" style="width:20px;height:20px"></i>
+    <span class="text-[11px] font-medium">歷史紀錄</span>
+  </button>
+  <button onclick="setTab('settings')" id="nav-settings" class="nav-btn flex flex-col items-center gap-1 px-4 py-1 rounded-lg">
+    <i data-lucide="settings" style="width:20px;height:20px"></i>
+    <span class="text-[11px] font-medium">設定</span>
+  </button>
+</div>
+
+<script>
+const PURPOSE_CHIPS = ["增肌", "減脂", "心肺", "體能", "專項技術", "復健", "比賽期"];
+
+const state = {
+  sheetUrl: localStorage.getItem('apps_script_url') || '',
+  roster: JSON.parse(localStorage.getItem('roster') || '[]'),
+  tab: 'log',
+  rows: [],
+  loadingRows: false,
+  fetchError: '',
+  savingId: null,
+  session: { student: '', date: todayStr(), purpose: '' },
+  exerciseForm: { name: '', sets: '', reps: '', notes: '' },
+  editingId: null,
+  editDraft: {},
+  selectedSessionKey: null,
+  urlDraft: localStorage.getItem('apps_script_url') || '',
+  newStudent: '',
+};
+
+function todayStr() {
+  const d = new Date();
+  const tz = d.getTimezoneOffset() * 60000;
+  return new Date(d - tz).toISOString().slice(0, 10);
+}
+function fmtDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr + 'T00:00:00');
+  const wd = ['日','一','二','三','四','五','六'][d.getDay()];
+  return `${d.getMonth()+1}/${d.getDate()} (${wd})`;
+}
+function fmtTime(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  if (isNaN(d)) return '';
+  return d.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+function esc(s) {
+  if (s === undefined || s === null) return '';
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.remove('hidden');
+  clearTimeout(window._toastTimer);
+  window._toastTimer = setTimeout(() => t.classList.add('hidden'), 2200);
+}
+
+function icons() { lucide.createIcons(); }
+
+function setTab(tab) {
+  state.tab = tab;
+  state.selectedSessionKey = null;
+  render();
+}
+
+async function fetchRows() {
+  if (!state.sheetUrl) return;
+  state.loadingRows = true;
+  state.fetchError = '';
+  render();
+  try {
+    const res = await fetch(state.sheetUrl, { method: 'GET' });
+    const data = await res.json();
+    if (data.status === 'ok') {
+      state.rows = data.data || [];
+    } else {
+      state.fetchError = data.message || '讀取失敗';
+    }
+  } catch (e) {
+    state.fetchError = '無法連上 Google Sheets,請確認設定裡的網址跟部署權限(誰可以存取需選「所有人」)';
+  } finally {
+    state.loadingRows = false;
+    render();
+  }
+}
+
+function saveUrl() {
+  state.sheetUrl = state.urlDraft.trim();
+  localStorage.setItem('apps_script_url', state.sheetUrl);
+  showToast('已儲存設定');
+  render();
+  fetchRows();
+}
+
+function addStudent() {
+  const name = state.newStudent.trim();
+  if (!name || state.roster.includes(name)) return;
+  state.roster.push(name);
+  state.newStudent = '';
+  localStorage.setItem('roster', JSON.stringify(state.roster));
+  render();
+}
+function removeStudent(name) {
+  state.roster = state.roster.filter(n => n !== name);
+  localStorage.setItem('roster', JSON.stringify(state.roster));
+  render();
+}
+
+function selectStudent(name) {
+  state.session.student = name;
+  render();
+}
+function selectPurpose(p) {
+  state.session.purpose = p;
+  render();
+}
+function onDateChange(v) {
+  state.session.date = v;
+  render();
+}
+
+function getSessions() {
+  const map = new Map();
+  for (const r of state.rows) {
+    const key = `${r['學生姓名']}||${r['日期']}`;
+    if (!map.has(key)) {
+      map.set(key, { key, student: r['學生姓名'], date: r['日期'], purpose: r['訓練目的'], exercises: [], latest: r['建立時間'] });
+    }
+    const s = map.get(key);
+    s.exercises.push(r);
+    if (new Date(r['建立時間']) > new Date(s.latest)) s.latest = r['建立時間'];
+    if (r['訓練目的']) s.purpose = r['訓練目的'];
+  }
+  return Array.from(map.values()).sort((a,b) => new Date(b.latest) - new Date(a.latest));
+}
+
+function getCurrentSessionExercises() {
+  if (!state.session.student || !state.session.date) return [];
+  return state.rows
+    .filter(r => r['學生姓名'] === state.session.student && r['日期'] === state.session.date)
+    .sort((a,b) => new Date(a['建立時間']) - new Date(b['建立時間']));
+}
+
+async function submitExercise() {
+  if (!state.session.student || !state.session.date || !state.exerciseForm.name.trim()) {
+    showToast('請填寫學生、日期跟動作名稱');
+    return;
+  }
+  state.savingId = 'new';
+  render();
+  const payload = {
+    action: 'add',
+    studentName: state.session.student,
+    date: state.session.date,
+    purpose: state.session.purpose,
+    exercise: state.exerciseForm.name.trim(),
+    sets: state.exerciseForm.sets,
+    reps: state.exerciseForm.reps,
+    notes: state.exerciseForm.notes,
+  };
+  try {
+    const res = await fetch(state.sheetUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (data.status === 'ok') {
+      state.rows.push({
+        ID: data.id, 學生姓名: state.session.student, 日期: state.session.date,
+        訓練目的: state.session.purpose, 動作名稱: payload.exercise, 組數: payload.sets,
+        次數: payload.reps, 備注: payload.notes, 建立時間: new Date().toISOString(),
+      });
+      state.exerciseForm = { name: '', sets: '', reps: '', notes: '' };
+      showToast('已記錄');
+    } else {
+      showToast('儲存失敗:' + data.message);
+    }
+  } catch (e) {
+    showToast('連線失敗,請檢查網路或設定');
+  } finally {
+    state.savingId = null;
+    render();
+  }
+}
+
+function startEdit(r) {
+  state.editingId = r.ID;
+  state.editDraft = { exercise: r['動作名稱'], sets: r['組數'], reps: r['次數'], notes: r['備注'] || '' };
+  render();
+}
+function cancelEdit() {
+  state.editingId = null;
+  render();
+}
+async function saveEdit(id) {
+  state.savingId = id;
+  render();
+  try {
+    const res = await fetch(state.sheetUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'update', id, ...state.editDraft }),
+    });
+    const data = await res.json();
+    if (data.status === 'ok') {
+      state.rows = state.rows.map(r => r.ID === id ? {
+        ...r,
+        動作名稱: state.editDraft.exercise ?? r['動作名稱'],
+        組數: state.editDraft.sets ?? r['組數'],
+        次數: state.editDraft.reps ?? r['次數'],
+        備注: state.editDraft.notes ?? r['備注'],
+      } : r);
+      state.editingId = null;
+      showToast('已更新');
+    } else {
+      showToast('更新失敗');
+    }
+  } catch (e) {
+    showToast('連線失敗');
+  } finally {
+    state.savingId = null;
+    render();
+  }
+}
+async function deleteExercise(id) {
+  state.savingId = id;
+  render();
+  try {
+    const res = await fetch(state.sheetUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'delete', id }),
+    });
+    const data = await res.json();
+    if (data.status === 'ok') {
+      state.rows = state.rows.filter(r => r.ID !== id);
+      showToast('已刪除');
+    } else {
+      showToast('刪除失敗');
+    }
+  } catch (e) {
+    showToast('連線失敗');
+  } finally {
+    state.savingId = null;
+    render();
+  }
+}
+
+function jumpToSession(key) {
+  const s = getSessions().find(x => x.key === key);
+  if (!s) return;
+  state.session = { student: s.student, date: s.date, purpose: s.purpose || '' };
+  state.tab = 'log';
+  state.selectedSessionKey = null;
+  render();
+}
+function selectSession(key) {
+  state.selectedSessionKey = key;
+  render();
+}
+function backToHistory() {
+  state.selectedSessionKey = null;
+  render();
+}
+
+// ---- input handlers (mutate state without full re-render, to keep focus) ----
+function bindLiveInput(id, path) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.oninput = (e) => {
+    const keys = path.split('.');
+    let obj = state;
+    for (let i = 0; i < keys.length - 1; i++) obj = obj[keys[i]];
+    obj[keys[keys.length - 1]] = e.target.value;
+  };
+}
+
+function exerciseChip(sets, reps) {
+  return `<span class="font-mono2 bg-stone-900 text-lime-300 text-xs px-2 py-1 rounded-md">${esc(sets)||'-'}×${esc(reps)||'-'}</span>`;
+}
+
+function exerciseRowHtml(r) {
+  const isEditing = state.editingId === r.ID;
+  const busy = state.savingId === r.ID;
+  if (isEditing) {
+    return `
+    <div class="border border-lime-300 bg-lime-50 rounded-xl p-3 space-y-2">
+      <input id="edit-exercise" value="${esc(state.editDraft.exercise)}" class="w-full border border-stone-300 rounded-lg px-2.5 py-1.5 text-sm" placeholder="動作名稱" />
+      <div class="flex gap-2">
+        <input id="edit-sets" value="${esc(state.editDraft.sets)}" class="w-1/2 border border-stone-300 rounded-lg px-2.5 py-1.5 text-sm" placeholder="組數" />
+        <input id="edit-reps" value="${esc(state.editDraft.reps)}" class="w-1/2 border border-stone-300 rounded-lg px-2.5 py-1.5 text-sm" placeholder="次數" />
+      </div>
+      <textarea id="edit-notes" rows="2" class="w-full border border-stone-300 rounded-lg px-2.5 py-1.5 text-sm" placeholder="備注">${esc(state.editDraft.notes)}</textarea>
+      <div class="flex gap-2 justify-end">
+        <button onclick="cancelEdit()" class="text-xs px-3 py-1.5 rounded-lg text-stone-500">取消</button>
+        <button onclick="saveEdit('${r.ID}')" ${busy?'disabled':''} class="text-xs px-3 py-1.5 rounded-lg bg-stone-900 text-lime-300 flex items-center gap-1">
+          <i data-lucide="${busy?'loader-2':'check'}" style="width:12px;height:12px" class="${busy?'animate-spin':''}"></i>儲存
+        </button>
+      </div>
+    </div>`;
+  }
+  return `
+  <div class="border border-stone-200 bg-white rounded-xl p-3">
+    <div class="flex items-start justify-between gap-2">
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="font-medium text-sm">${esc(r['動作名稱'])}</span>
+          ${exerciseChip(r['組數'], r['次數'])}
+        </div>
+        ${r['備注'] ? `<p class="text-xs text-stone-500 mt-1.5 leading-relaxed">備注:${esc(r['備注'])}</p>` : ''}
+      </div>
+      <div class="flex items-center gap-1 shrink-0">
+        <button onclick='startEdit(${JSON.stringify(r).replace(/'/g,"&#39;")})' class="p-1.5 text-stone-400"><i data-lucide="pencil" style="width:14px;height:14px"></i></button>
+        <button onclick="deleteExercise('${r.ID}')" ${busy?'disabled':''} class="p-1.5 text-stone-400">
+          <i data-lucide="${busy?'loader-2':'trash-2'}" style="width:14px;height:14px" class="${busy?'animate-spin':''}"></i>
+        </button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderSetup() {
+  return `
+  <div class="p-5">
+    <div class="bg-white border border-stone-200 rounded-2xl p-5">
+      <h2 class="font-display font-bold text-lg mb-1">先連接你的 Google Sheets</h2>
+      <p class="text-sm text-stone-500 mb-4">貼上 Apps Script 部署後拿到的網址(格式類似 https://script.google.com/macros/s/xxxx/exec)</p>
+      <input id="setup-url" value="${esc(state.urlDraft)}" placeholder="https://script.google.com/macros/s/.../exec" class="w-full border border-stone-300 rounded-xl px-3 py-2.5 text-sm mb-3" />
+      <button onclick="saveUrl()" class="w-full bg-stone-900 text-lime-300 rounded-xl py-2.5 font-medium text-sm">儲存並開始使用</button>
+    </div>
+  </div>`;
+}
+
+function renderLog() {
+  const exercises = getCurrentSessionExercises();
+  return `
+  <div class="p-4 space-y-4">
+    <div class="bg-white border border-stone-200 rounded-2xl p-4">
+      <h3 class="text-xs font-semibold text-stone-400 uppercase tracking-wide mb-3">課表基本資料</h3>
+      <div class="space-y-3">
+        <div>
+          <label class="text-xs text-stone-500 mb-1 flex items-center gap-1"><i data-lucide="users" style="width:12px;height:12px"></i> 學生</label>
+          ${state.roster.length === 0
+            ? `<p class="text-xs text-rose-500">尚未新增學生,請到「設定」加入學生名單</p>`
+            : `<div class="flex flex-wrap gap-1.5">${state.roster.map(name => `
+              <button onclick="selectStudent('${esc(name).replace(/'/g,"&#39;")}')" class="px-3 py-1.5 rounded-full text-sm border ${state.session.student===name ? 'bg-stone-900 text-lime-300 border-stone-900' : 'border-stone-300 text-stone-600'}">${esc(name)}</button>
+            `).join('')}</div>`}
+        </div>
+        <div>
+          <label class="text-xs text-stone-500 mb-1 flex items-center gap-1"><i data-lucide="calendar" style="width:12px;height:12px"></i> 日期</label>
+          <input type="date" value="${esc(state.session.date)}" onchange="onDateChange(this.value)" class="border border-stone-300 rounded-lg px-3 py-1.5 text-sm" />
+        </div>
+        <div>
+          <label class="text-xs text-stone-500 mb-1 block">訓練目的</label>
+          <input id="purpose-input" value="${esc(state.session.purpose)}" placeholder="例如:增肌、減脂..." class="w-full border border-stone-300 rounded-lg px-3 py-1.5 text-sm mb-2" />
+          <div class="flex flex-wrap gap-1.5">${PURPOSE_CHIPS.map(p => `<button onclick="selectPurpose('${p}')" class="px-2.5 py-1 rounded-full text-xs bg-stone-100 text-stone-500">${p}</button>`).join('')}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-white border border-stone-200 rounded-2xl p-4">
+      <h3 class="text-xs font-semibold text-stone-400 uppercase tracking-wide mb-3">新增動作</h3>
+      <div class="space-y-2">
+        <input id="ex-name" value="${esc(state.exerciseForm.name)}" placeholder="動作名稱,例如:深蹲" class="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm" />
+        <div class="flex gap-2">
+          <input id="ex-sets" value="${esc(state.exerciseForm.sets)}" inputmode="numeric" placeholder="組數" class="w-1/2 border border-stone-300 rounded-lg px-3 py-2 text-sm" />
+          <input id="ex-reps" value="${esc(state.exerciseForm.reps)}" inputmode="numeric" placeholder="次數" class="w-1/2 border border-stone-300 rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <textarea id="ex-notes" rows="2" placeholder="備注(訓練狀況、重量、感受...)" class="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm">${esc(state.exerciseForm.notes)}</textarea>
+        <button onclick="submitExercise()" ${state.savingId==='new'?'disabled':''} class="w-full bg-lime-400 text-stone-900 rounded-lg py-2.5 font-semibold text-sm flex items-center justify-center gap-1.5 disabled:opacity-50">
+          <i data-lucide="${state.savingId==='new'?'loader-2':'plus'}" style="width:16px;height:16px" class="${state.savingId==='new'?'animate-spin':''}"></i>記錄這個動作
+        </button>
+      </div>
+    </div>
+
+    ${state.session.student && state.session.date ? `
+    <div>
+      <h3 class="text-xs font-semibold text-stone-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+        ${esc(state.session.student)} · ${fmtDate(state.session.date)} 的課表
+        ${state.loadingRows ? '<i data-lucide="loader-2" style="width:12px;height:12px" class="animate-spin"></i>' : ''}
+      </h3>
+      ${exercises.length === 0
+        ? `<p class="text-sm text-stone-400 py-4 text-center">還沒有動作,新增第一個吧</p>`
+        : `<div class="space-y-2">${exercises.map(exerciseRowHtml).join('')}</div>`}
+    </div>` : ''}
+  </div>`;
+}
+
+function renderHistory() {
+  if (state.selectedSessionKey) {
+    const s = getSessions().find(x => x.key === state.selectedSessionKey);
+    if (!s) { state.selectedSessionKey = null; return renderHistory(); }
+    return `
+    <div class="p-4">
+      <button onclick="backToHistory()" class="flex items-center gap-1 text-sm text-stone-500 mb-3">
+        <i data-lucide="chevron-left" style="width:16px;height:16px"></i>返回列表
+      </button>
+      <div class="bg-stone-900 text-stone-50 rounded-2xl p-4 mb-3">
+        <div class="font-display text-lg font-bold">${esc(s.student)}</div>
+        <div class="text-stone-400 text-sm mt-0.5">${fmtDate(s.date)} · ${esc(s.purpose)||'未填寫目的'}</div>
+      </div>
+      <div class="space-y-2 mb-3">${s.exercises.map(exerciseRowHtml).join('')}</div>
+      <button onclick="jumpToSession('${s.key.replace(/'/g,"&#39;")}')" class="w-full bg-lime-400 text-stone-900 rounded-lg py-2.5 font-semibold text-sm flex items-center justify-center gap-1.5">
+        <i data-lucide="plus" style="width:16px;height:16px"></i>在這堂繼續新增動作
+      </button>
+    </div>`;
+  }
+  const sessions = getSessions();
+  return `
+  <div class="p-4">
+    <h3 class="text-xs font-semibold text-stone-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+      歷史紀錄 ${state.loadingRows ? '<i data-lucide="loader-2" style="width:12px;height:12px" class="animate-spin"></i>' : ''}
+    </h3>
+    ${sessions.length === 0
+      ? `<p class="text-sm text-stone-400 py-8 text-center">還沒有任何紀錄</p>`
+      : `<div class="space-y-2">${sessions.map(s => `
+        <button onclick="selectSession('${s.key.replace(/'/g,"&#39;")}')" class="w-full text-left bg-white border border-stone-200 rounded-xl p-3.5 flex items-center justify-between relative overflow-hidden">
+          <div class="absolute left-0 top-0 bottom-0 w-1 bg-lime-400"></div>
+          <div class="pl-2">
+            <div class="font-medium text-sm">${esc(s.student)}</div>
+            <div class="text-xs text-stone-400 mt-0.5">${fmtDate(s.date)} · ${s.exercises.length} 個動作</div>
+          </div>
+          <div class="font-mono2 text-sm text-stone-500 pl-2 shrink-0">${fmtTime(s.latest)}</div>
+        </button>
+      `).join('')}</div>`}
+  </div>`;
+}
+
+function renderSettings() {
+  return `
+  <div class="p-4 space-y-4">
+    <div class="bg-white border border-stone-200 rounded-2xl p-4">
+      <h3 class="text-xs font-semibold text-stone-400 uppercase tracking-wide mb-3">Google Sheets 連接</h3>
+      <input id="settings-url" value="${esc(state.urlDraft)}" placeholder="https://script.google.com/macros/s/.../exec" class="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm mb-2" />
+      <div class="flex gap-2">
+        <button onclick="saveUrl()" class="flex-1 bg-stone-900 text-lime-300 rounded-lg py-2 text-sm font-medium">儲存網址</button>
+        <button onclick="fetchRows()" class="px-3 py-2 border border-stone-300 rounded-lg text-sm flex items-center gap-1">
+          ${state.loadingRows ? '<i data-lucide="loader-2" style="width:14px;height:14px" class="animate-spin"></i>' : '重新整理'}
+        </button>
+      </div>
+    </div>
+    <div class="bg-white border border-stone-200 rounded-2xl p-4">
+      <h3 class="text-xs font-semibold text-stone-400 uppercase tracking-wide mb-3">學生名單(${state.roster.length})</h3>
+      <div class="flex gap-2 mb-3">
+        <input id="new-student" value="${esc(state.newStudent)}" placeholder="輸入學生姓名" class="flex-1 border border-stone-300 rounded-lg px-3 py-2 text-sm" onkeydown="if(event.key==='Enter')addStudent()" />
+        <button onclick="addStudent()" class="px-3 py-2 bg-lime-400 text-stone-900 rounded-lg"><i data-lucide="plus" style="width:16px;height:16px"></i></button>
+      </div>
+      <div class="flex flex-wrap gap-1.5">${state.roster.map(name => `
+        <span class="flex items-center gap-1 bg-stone-100 text-stone-700 text-sm px-2.5 py-1 rounded-full">
+          ${esc(name)}
+          <button onclick="removeStudent('${esc(name).replace(/'/g,"&#39;")}')" class="text-stone-400"><i data-lucide="x" style="width:12px;height:12px"></i></button>
+        </span>
+      `).join('')}</div>
+    </div>
+  </div>`;
+}
+
+function render() {
+  const app = document.getElementById('app');
+  let html = '';
+
+  if (!state.sheetUrl) {
+    html = renderSetup();
+  } else {
+    if (state.fetchError) {
+      html += `<div class="mx-4 mt-4 flex items-start gap-2 bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-xl p-3">
+        <i data-lucide="alert-circle" style="width:16px;height:16px" class="mt-0.5 shrink-0"></i><span>${esc(state.fetchError)}</span>
+      </div>`;
+    }
+    if (state.tab === 'log') html += renderLog();
+    else if (state.tab === 'history') html += renderHistory();
+    else if (state.tab === 'settings') html += renderSettings();
+  }
+
+  app.innerHTML = html;
+
+  // nav active states
+  ['log','history','settings'].forEach(t => {
+    const el = document.getElementById('nav-' + t);
+    if (!el) return;
+    el.className = 'nav-btn flex flex-col items-center gap-1 px-4 py-1 rounded-lg ' + (state.tab === t ? 'text-stone-900' : 'text-stone-400');
+    const icon = el.querySelector('i');
+    if (icon) icon.style.color = state.tab === t ? '#84cc16' : '';
+  });
+
+  // rebind live inputs
+  bindLiveInput('setup-url', 'urlDraft');
+  bindLiveInput('settings-url', 'urlDraft');
+  bindLiveInput('purpose-input', 'session.purpose');
+  bindLiveInput('ex-name', 'exerciseForm.name');
+  bindLiveInput('ex-sets', 'exerciseForm.sets');
+  bindLiveInput('ex-reps', 'exerciseForm.reps');
+  bindLiveInput('ex-notes', 'exerciseForm.notes');
+  bindLiveInput('new-student', 'newStudent');
+  bindLiveInput('edit-exercise', 'editDraft.exercise');
+  bindLiveInput('edit-sets', 'editDraft.sets');
+  bindLiveInput('edit-reps', 'editDraft.reps');
+  bindLiveInput('edit-notes', 'editDraft.notes');
+
+  icons();
+}
+
+render();
+if (state.sheetUrl) fetchRows();
+</script>
+</body>
+</html>

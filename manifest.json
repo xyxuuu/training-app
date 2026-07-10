@@ -1,0 +1,13 @@
+{
+  "name": "訓練紀錄本",
+  "short_name": "訓練紀錄",
+  "description": "記錄每位學生每次的訓練課表",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#fafaf9",
+  "theme_color": "#1c1917",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
