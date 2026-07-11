@@ -4,70 +4,258 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
 <title>訓練紀錄本</title>
-<meta name="theme-color" content="#1c1917" />
+<meta name="theme-color" content="#EFFBFA" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black" />
 <meta name="apple-mobile-web-app-title" content="訓練紀錄本" />
 <link rel="manifest" href="manifest.json" />
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
 <link rel="icon" href="icon-192.png" />
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
-  body { font-family: 'IBM Plex Sans', sans-serif; -webkit-tap-highlight-color: transparent; }
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700;800&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: #EFFBFA;
+    color: #233330;
+    font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    padding-bottom: 92px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .page { max-width: 640px; margin: 0 auto; }
   .font-display { font-family: 'Space Grotesk', sans-serif; }
-  .font-mono2 { font-family: 'IBM Plex Mono', monospace; }
-  input, textarea { font-family: inherit; }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+
+  /* ---- header ---- */
+  .header {
+    background: #EFFBFA;
+    border-bottom: 1px solid #DCEEEC;
+    padding: 22px 16px 16px;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    text-align: left;
+  }
+  .header-row { display: flex; align-items: center; gap: 8px; }
+  .header-row .icon { color: #159C93; }
+  .header h1 { font-size: 25px; font-weight: 800; margin: 0; letter-spacing: -0.02em; text-align: left; }
+  .header p { color: #6E8C89; font-size: 14px; margin: 4px 0 0; text-align: left; }
+
+  /* ---- toast ---- */
+  .toast {
+    position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+    z-index: 50; background: #159C93; color: #E3F8F6; font-size: 14px;
+    padding: 9px 18px; border-radius: 999px; box-shadow: 0 4px 14px rgba(43,34,48,0.18);
+    display: none;
+  }
+  .toast.show { display: block; }
+
+  /* ---- layout ---- */
+  .content { padding: 16px; text-align: left; }
+  .card {
+    background: #fff; border: 1px solid #DCEEEC; border-radius: 16px;
+    padding: 16px; box-shadow: 0 1px 3px rgba(43,34,48,0.05); text-align: left;
+  }
+  .card + .card, .block + .block { margin-top: 16px; }
+  .card-title {
+    font-size: 13px; font-weight: 600; color: #6E8C89; text-transform: uppercase;
+    letter-spacing: 0.04em; margin: 0 0 12px;
+  }
+
+  .field { margin-bottom: 14px; text-align: left; }
+  .field:last-child { margin-bottom: 0; }
+  .field-label {
+    font-size: 14px; color: #6E8C89; margin-bottom: 7px; display: flex;
+    align-items: center; gap: 5px; text-align: left;
+  }
+  .field-hint { color: #9BB5B2; font-weight: 400; }
+
+  input[type=text], input[type=date], input[type=number], textarea {
+    width: 100%; border: 1px solid #D3EBE8; border-radius: 10px; padding: 11px 14px;
+    font-size: 16px; color: #233330; background: #fff; font-family: inherit;
+    text-align: left;
+  }
+  textarea { resize: vertical; }
+  input:focus, textarea:focus {
+    outline: none; border-color: #159C93; box-shadow: 0 0 0 3px rgba(21,156,147,0.15);
+  }
+  input::placeholder, textarea::placeholder { color: #9BB5B2; }
+
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  .chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    border: 1px solid #D3EBE8; background: #fff; color: #56706D; padding: 9px 16px;
+    border-radius: 999px; font-size: 16px; cursor: pointer; font-family: inherit;
+  }
+  .chip.selected { background: #159C93; color: #fff; border-color: #159C93; }
+  .chip-sm {
+    border: none; background: #D9F2EF; color: #0E7A72; padding: 6px 13px;
+    border-radius: 999px; font-size: 14px; cursor: pointer; font-family: inherit;
+  }
+
+  .btn-primary {
+    width: 100%; background: #159C93; color: #fff; border: none; border-radius: 10px;
+    padding: 13px; font-size: 16px; font-weight: 600; display: flex; align-items: center;
+    justify-content: center; gap: 7px; cursor: pointer; font-family: inherit;
+  }
+  .btn-primary:disabled { opacity: 0.5; }
+  .btn-secondary {
+    border: 1px solid #D3EBE8; background: #fff; color: #233330; border-radius: 10px;
+    padding: 11px 16px; font-size: 16px; cursor: pointer; display: flex; align-items: center;
+    gap: 6px; font-family: inherit; white-space: nowrap;
+  }
+  .btn-text { background: none; border: none; color: #6E8C89; font-size: 16px; cursor: pointer; padding: 8px 4px; font-family: inherit; display:flex; align-items:center; gap:4px; }
+  .btn-row { display: flex; gap: 8px; }
+  .btn-row .btn-primary { flex: 1; }
+
+  /* ---- exercise cards ---- */
+  .exercise-card { border: 1px solid #DCEEEC; background: #fff; border-radius: 12px; padding: 14px; text-align: left; }
+  .exercise-card + .exercise-card { margin-top: 8px; }
+  .exercise-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+  .exercise-name { font-weight: 700; font-size: 18px; color: #233330; }
+  .exercise-meta { font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: #6E8C89; margin-top: 4px; }
+  .exercise-note { font-size: 14px; color: #6E8C89; margin-top: 6px; line-height: 1.6; }
+  .exercise-actions { display: flex; gap: 2px; flex-shrink: 0; }
+  .icon-btn { background: none; border: none; color: #9BB5B2; padding: 7px; cursor: pointer; display:flex; }
+
+  .edit-card { border: 2px solid #159C93; background: #E7F7F5; border-radius: 12px; padding: 14px; text-align: left; }
+  .edit-card .field { margin-bottom: 10px; }
+
+  /* ---- history ---- */
+  .history-item {
+    width: 100%; text-align: left; background: #fff; border: 1px solid #DCEEEC;
+    border-left: 4px solid #159C93; border-radius: 12px; padding: 14px 16px 14px 14px;
+    display: flex; align-items: center; justify-content: space-between;
+    box-shadow: 0 1px 3px rgba(43,34,48,0.05); cursor: pointer; font-family: inherit;
+  }
+  .history-item + .history-item { margin-top: 8px; }
+  .history-name { font-weight: 700; font-size: 18px; color: #233330; }
+  .history-sub { font-size: 14px; color: #6E8C89; margin-top: 2px; }
+  .history-time { font-family: 'IBM Plex Mono', monospace; font-size: 16px; color: #6E8C89; flex-shrink: 0; padding-left: 10px; }
+
+  .session-header { background: #fff; border: 1px solid #DCEEEC; border-radius: 16px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(43,34,48,0.05); text-align: left; }
+  .session-header-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .session-name { font-family: 'Space Grotesk', sans-serif; font-weight: 800; font-size: 21px; color: #233330; }
+  .session-date { font-size: 14px; color: #6E8C89; margin-top: 4px; }
+  .session-note { font-size: 14px; color: #56706D; margin-top: 10px; padding-top: 10px; border-top: 1px solid #DCEEEC; line-height: 1.6; }
+
+  .tag-purpose { font-size: 12px; padding: 5px 11px; border-radius: 999px; background: #D9F2EF; color: #0E7A72; font-weight: 600; flex-shrink: 0; }
+
+  .back-link { display: flex; align-items: center; gap: 4px; font-size: 16px; color: #6E8C89; background: none; border: none; padding: 8px 0 12px; cursor: pointer; font-family: inherit; }
+
+  /* ---- nav ---- */
+  .nav-bar { position: fixed; left: 0; right: 0; bottom: 0; background: #fff; border-top: 1px solid #DCEEEC; z-index: 30; }
+  .nav-inner { max-width: 640px; margin: 0 auto; display: flex; justify-content: space-around; padding: 6px 0; }
+  .nav-btn {
+    display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 7px 18px;
+    border-radius: 10px; background: none; border: none; color: #9BB5B2; font-size: 12px;
+    font-family: inherit; cursor: pointer; flex: 1;
+  }
+  .nav-btn.active { color: #159C93; }
+
+  .alert-error {
+    margin: 0 16px 16px; display: flex; gap: 8px; background: #FDF0EF; border: 1px solid #F3C9C4;
+    color: #B23A2E; font-size: 14px; border-radius: 12px; padding: 12px; text-align: left;
+  }
+
+  .empty-state { color: #9BB5B2; font-size: 16px; text-align: center; padding: 32px 0; }
+
+  .setup-title { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 20px; margin: 0 0 6px; text-align: left; }
+  .setup-desc { font-size: 14px; color: #6E8C89; margin: 0 0 16px; line-height: 1.6; text-align: left; }
+
+  .chips-list { display: flex; flex-wrap: wrap; gap: 8px; }
+  .name-tag {
+    display: flex; align-items: center; gap: 6px; background: #D9F2EF; color: #0E7A72;
+    font-size: 16px; padding: 7px 14px; border-radius: 999px;
+  }
+  .name-tag button { background: none; border: none; color: #4FA39C; cursor: pointer; display: flex; padding: 0; }
+
+  .icon { display: inline-block; vertical-align: middle; flex-shrink: 0; }
+  .spin { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
-<body class="bg-stone-50 text-stone-900 min-h-screen pb-24">
+<body>
 
-<div class="bg-stone-900 text-stone-50 px-5 pt-6 pb-5 sticky top-0 z-20">
-  <div class="flex items-center gap-2">
-    <i data-lucide="dumbbell" class="text-lime-400" style="width:22px;height:22px"></i>
-    <h1 class="font-display text-xl font-bold tracking-tight">訓練紀錄本</h1>
+<div class="header">
+  <div class="page">
+    <div class="header-row">
+      <span id="header-icon"></span>
+      <h1>訓練紀錄本</h1>
+    </div>
+    <p>即時記錄每位學生的每一組訓練</p>
   </div>
-  <p class="text-stone-400 text-xs mt-1">即時記錄每位學生的每一組訓練</p>
 </div>
 
-<div id="toast" class="fixed top-3 left-1/2 -translate-x-1/2 z-50 bg-stone-900 text-lime-300 text-sm px-4 py-2 rounded-full shadow-lg font-mono2 hidden"></div>
+<div id="toast" class="toast mono"></div>
 
-<div id="app"></div>
+<div id="app" class="page"></div>
 
-<div class="fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 flex justify-around py-2 z-30">
-  <button onclick="setTab('log')" id="nav-log" class="nav-btn flex flex-col items-center gap-1 px-4 py-1 rounded-lg">
-    <i data-lucide="plus" style="width:20px;height:20px"></i>
-    <span class="text-[11px] font-medium">新增紀錄</span>
-  </button>
-  <button onclick="setTab('history')" id="nav-history" class="nav-btn flex flex-col items-center gap-1 px-4 py-1 rounded-lg">
-    <i data-lucide="clipboard-list" style="width:20px;height:20px"></i>
-    <span class="text-[11px] font-medium">歷史紀錄</span>
-  </button>
-  <button onclick="setTab('settings')" id="nav-settings" class="nav-btn flex flex-col items-center gap-1 px-4 py-1 rounded-lg">
-    <i data-lucide="settings" style="width:20px;height:20px"></i>
-    <span class="text-[11px] font-medium">設定</span>
-  </button>
+<div class="nav-bar">
+  <div class="nav-inner">
+    <button onclick="setTab('log')" id="nav-log" class="nav-btn"></button>
+    <button onclick="setTab('history')" id="nav-history" class="nav-btn"></button>
+    <button onclick="setTab('settings')" id="nav-settings" class="nav-btn"></button>
+  </div>
 </div>
 
 <script>
+// ---------------- icons (inline SVG, no external dependency) ----------------
+const ICON_PATHS = {
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  x: '<path d="M18 6 6 18M6 6l12 12"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  chevronLeft: '<path d="M15 18l-6-6 6-6"/>',
+  calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  users: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+  clipboard: '<path d="M9 2h6a1 1 0 0 1 1 1v1H8V3a1 1 0 0 1 1-1z"/><rect x="4" y="4" width="16" height="18" rx="2"/><path d="M9 11h6M9 15h6M9 19h3"/>',
+  pencil: '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+  trash: '<path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/>',
+  loader: '<circle cx="12" cy="12" r="10" opacity="0.25"/><path d="M22 12a10 10 0 0 1-10 10"/>',
+  alert: '<circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>',
+  dumbbell: '<rect x="2" y="9" width="4" height="6" rx="1"/><rect x="18" y="9" width="4" height="6" rx="1"/><path d="M6 12h12"/><rect x="8.5" y="10" width="2" height="4" rx="0.5"/><rect x="13.5" y="10" width="2" height="4" rx="0.5"/>',
+  trend: '<path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/>',
+};
+function ic(name, size, spinning) {
+  size = size || 18;
+  const cls = 'icon' + (spinning ? ' spin' : '');
+  return `<svg class="${cls}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON_PATHS[name] || ''}</svg>`;
+}
+
 const PURPOSE_CHIPS = ["增肌", "減脂", "心肺", "體能", "專項技術", "復健", "比賽期"];
+
+// 舊版 roster 是純姓名字串陣列,這裡做相容轉換成物件 { name, gender, birthday }
+function loadRoster() {
+  let raw = [];
+  try { raw = JSON.parse(localStorage.getItem('roster') || '[]'); } catch (e) {}
+  return raw.map(item => typeof item === 'string' ? { name: item, gender: '', birthday: '' } : item);
+}
+function saveRoster() {
+  localStorage.setItem('roster', JSON.stringify(state.roster));
+}
 
 const state = {
   sheetUrl: localStorage.getItem('apps_script_url') || '',
-  roster: JSON.parse(localStorage.getItem('roster') || '[]'),
+  roster: loadRoster(),
   tab: 'log',
   rows: [],
   loadingRows: false,
   fetchError: '',
   savingId: null,
-  session: { student: '', date: todayStr(), purpose: '' },
-  exerciseForm: { name: '', sets: '', reps: '', notes: '' },
+  session: { student: '', date: todayStr(), purpose: '', sessionNote: '' },
+  exerciseForm: { name: '', sets: '', reps: '', weight: '', duration: '', notes: '' },
   editingId: null,
   editDraft: {},
   selectedSessionKey: null,
+  historySearch: '',
   urlDraft: localStorage.getItem('apps_script_url') || '',
-  newStudent: '',
+  newStudent: { name: '', gender: '', birthday: '' },
+  editingStudent: null,
+  studentEditDraft: {},
+  expandedMaxWeights: null,
 };
 
 function todayStr() {
@@ -78,6 +266,7 @@ function todayStr() {
 function fmtDate(dateStr) {
   if (!dateStr) return '';
   const d = new Date(dateStr + 'T00:00:00');
+  if (isNaN(d)) return dateStr;
   const wd = ['日','一','二','三','四','五','六'][d.getDay()];
   return `${d.getMonth()+1}/${d.getDate()} (${wd})`;
 }
@@ -95,12 +284,10 @@ function esc(s) {
 function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
-  t.classList.remove('hidden');
+  t.classList.add('show');
   clearTimeout(window._toastTimer);
-  window._toastTimer = setTimeout(() => t.classList.add('hidden'), 2200);
+  window._toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
 }
-
-function icons() { lucide.createIcons(); }
 
 function setTab(tab) {
   state.tab = tab;
@@ -138,43 +325,80 @@ function saveUrl() {
 }
 
 function addStudent() {
-  const name = state.newStudent.trim();
-  if (!name || state.roster.includes(name)) return;
-  state.roster.push(name);
-  state.newStudent = '';
-  localStorage.setItem('roster', JSON.stringify(state.roster));
+  const name = state.newStudent.name.trim();
+  if (!name || state.roster.some(s => s.name === name)) return;
+  state.roster.push({ name, gender: state.newStudent.gender, birthday: state.newStudent.birthday });
+  state.newStudent = { name: '', gender: '', birthday: '' };
+  saveRoster();
   render();
 }
 function removeStudent(name) {
-  state.roster = state.roster.filter(n => n !== name);
-  localStorage.setItem('roster', JSON.stringify(state.roster));
+  state.roster = state.roster.filter(s => s.name !== name);
+  saveRoster();
+  render();
+}
+function startEditStudent(s) {
+  state.editingStudent = s.name;
+  state.studentEditDraft = { name: s.name, gender: s.gender || '', birthday: s.birthday || '' };
+  render();
+}
+function cancelEditStudent() { state.editingStudent = null; render(); }
+function saveEditStudent(originalName) {
+  const newName = state.studentEditDraft.name.trim();
+  if (!newName) { showToast('姓名不能空白'); return; }
+  state.roster = state.roster.map(s => s.name === originalName ? { name: newName, gender: state.studentEditDraft.gender, birthday: state.studentEditDraft.birthday } : s);
+  // 如果改了姓名,同步更新目前選取中的學生跟歷史搜尋文字,避免對不上
+  if (state.session.student === originalName) state.session.student = newName;
+  if (state.historySearch === originalName) state.historySearch = newName;
+  state.editingStudent = null;
+  saveRoster();
+  render();
+}
+function toggleMaxWeights(name) {
+  state.expandedMaxWeights = state.expandedMaxWeights === name ? null : name;
   render();
 }
 
-function selectStudent(name) {
-  state.session.student = name;
-  render();
+function calcAge(birthday) {
+  if (!birthday) return null;
+  const b = new Date(birthday + 'T00:00:00');
+  if (isNaN(b)) return null;
+  const now = new Date();
+  let age = now.getFullYear() - b.getFullYear();
+  const m = now.getMonth() - b.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < b.getDate())) age--;
+  return age;
 }
-function selectPurpose(p) {
-  state.session.purpose = p;
-  render();
+
+// 該學生每個動作曾經記錄過的最大重量
+function getStudentMaxWeights(name) {
+  const map = new Map();
+  for (const r of state.rows) {
+    if (r['學生姓名'] !== name) continue;
+    const w = parseFloat(r['重量']);
+    if (!w) continue;
+    const ex = r['動作名稱'];
+    if (!map.has(ex) || w > map.get(ex)) map.set(ex, w);
+  }
+  return Array.from(map.entries()).map(([exercise, maxWeight]) => ({ exercise, maxWeight })).sort((a,b) => b.maxWeight - a.maxWeight);
 }
-function onDateChange(v) {
-  state.session.date = v;
-  render();
-}
+
+function selectStudent(name) { state.session.student = name; render(); }
+function selectPurpose(p) { state.session.purpose = p; render(); }
+function onDateChange(v) { state.session.date = v; render(); }
 
 function getSessions() {
   const map = new Map();
   for (const r of state.rows) {
     const key = `${r['學生姓名']}||${r['日期']}`;
     if (!map.has(key)) {
-      map.set(key, { key, student: r['學生姓名'], date: r['日期'], purpose: r['訓練目的'], exercises: [], latest: r['建立時間'] });
+      map.set(key, { key, student: r['學生姓名'], date: r['日期'], purpose: r['訓練目的'], sessionNote: r['本堂備註'], exercises: [], latest: r['建立時間'] });
     }
     const s = map.get(key);
     s.exercises.push(r);
     if (new Date(r['建立時間']) > new Date(s.latest)) s.latest = r['建立時間'];
     if (r['訓練目的']) s.purpose = r['訓練目的'];
+    if (r['本堂備註']) s.sessionNote = r['本堂備註'];
   }
   return Array.from(map.values()).sort((a,b) => new Date(b.latest) - new Date(a.latest));
 }
@@ -184,6 +408,42 @@ function getCurrentSessionExercises() {
   return state.rows
     .filter(r => r['學生姓名'] === state.session.student && r['日期'] === state.session.date)
     .sort((a,b) => new Date(a['建立時間']) - new Date(b['建立時間']));
+}
+
+// 訓練容量 = 組數 × 次數 × 重量,依日期加總,只計算有填重量的動作
+function getStudentVolumeSeries(student) {
+  const map = new Map();
+  for (const r of state.rows) {
+    if (r['學生姓名'] !== student) continue;
+    const sets = parseFloat(r['組數']) || 0;
+    const reps = parseFloat(r['次數']) || 0;
+    const weight = parseFloat(r['重量']) || 0;
+    const vol = sets * reps * weight;
+    if (!vol) continue;
+    map.set(r['日期'], (map.get(r['日期']) || 0) + vol);
+  }
+  return Array.from(map.entries())
+    .map(([date, volume]) => ({ date, volume }))
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+}
+
+// 單堂(一組動作清單)的訓練容量總和
+function getSessionVolume(exercises) {
+  return exercises.reduce((sum, r) => {
+    const sets = parseFloat(r['組數']) || 0;
+    const reps = parseFloat(r['次數']) || 0;
+    const weight = parseFloat(r['重量']) || 0;
+    return sum + sets * reps * weight;
+  }, 0);
+}
+
+function syncSessionMetaFromRows() {
+  const existing = getCurrentSessionExercises();
+  if (existing.length > 0) {
+    const last = existing[existing.length - 1];
+    if (!state.session.purpose && last['訓練目的']) state.session.purpose = last['訓練目的'];
+    if (!state.session.sessionNote && last['本堂備註']) state.session.sessionNote = last['本堂備註'];
+  }
 }
 
 async function submitExercise() {
@@ -198,9 +458,12 @@ async function submitExercise() {
     studentName: state.session.student,
     date: state.session.date,
     purpose: state.session.purpose,
+    sessionNote: state.session.sessionNote,
     exercise: state.exerciseForm.name.trim(),
     sets: state.exerciseForm.sets,
     reps: state.exerciseForm.reps,
+    weight: state.exerciseForm.weight,
+    duration: state.exerciseForm.duration,
     notes: state.exerciseForm.notes,
   };
   try {
@@ -213,10 +476,12 @@ async function submitExercise() {
     if (data.status === 'ok') {
       state.rows.push({
         ID: data.id, 學生姓名: state.session.student, 日期: state.session.date,
-        訓練目的: state.session.purpose, 動作名稱: payload.exercise, 組數: payload.sets,
-        次數: payload.reps, 備注: payload.notes, 建立時間: new Date().toISOString(),
+        訓練目的: state.session.purpose, 本堂備註: state.session.sessionNote,
+        動作名稱: payload.exercise, 組數: payload.sets, 次數: payload.reps,
+        重量: payload.weight, 秒數: payload.duration, 備注: payload.notes,
+        建立時間: new Date().toISOString(),
       });
-      state.exerciseForm = { name: '', sets: '', reps: '', notes: '' };
+      state.exerciseForm = { name: '', sets: '', reps: '', weight: '', duration: '', notes: '' };
       showToast('已記錄');
     } else {
       showToast('儲存失敗:' + data.message);
@@ -231,13 +496,10 @@ async function submitExercise() {
 
 function startEdit(r) {
   state.editingId = r.ID;
-  state.editDraft = { exercise: r['動作名稱'], sets: r['組數'], reps: r['次數'], notes: r['備注'] || '' };
+  state.editDraft = { exercise: r['動作名稱'], sets: r['組數'], reps: r['次數'], weight: r['重量'], duration: r['秒數'], notes: r['備注'] || '' };
   render();
 }
-function cancelEdit() {
-  state.editingId = null;
-  render();
-}
+function cancelEdit() { state.editingId = null; render(); }
 async function saveEdit(id) {
   state.savingId = id;
   render();
@@ -254,6 +516,8 @@ async function saveEdit(id) {
         動作名稱: state.editDraft.exercise ?? r['動作名稱'],
         組數: state.editDraft.sets ?? r['組數'],
         次數: state.editDraft.reps ?? r['次數'],
+        重量: state.editDraft.weight ?? r['重量'],
+        秒數: state.editDraft.duration ?? r['秒數'],
         備注: state.editDraft.notes ?? r['備注'],
       } : r);
       state.editingId = null;
@@ -295,21 +559,14 @@ async function deleteExercise(id) {
 function jumpToSession(key) {
   const s = getSessions().find(x => x.key === key);
   if (!s) return;
-  state.session = { student: s.student, date: s.date, purpose: s.purpose || '' };
+  state.session = { student: s.student, date: s.date, purpose: s.purpose || '', sessionNote: s.sessionNote || '' };
   state.tab = 'log';
   state.selectedSessionKey = null;
   render();
 }
-function selectSession(key) {
-  state.selectedSessionKey = key;
-  render();
-}
-function backToHistory() {
-  state.selectedSessionKey = null;
-  render();
-}
+function selectSession(key) { state.selectedSessionKey = key; render(); }
+function backToHistory() { state.selectedSessionKey = null; render(); }
 
-// ---- input handlers (mutate state without full re-render, to keep focus) ----
 function bindLiveInput(id, path) {
   const el = document.getElementById(id);
   if (!el) return;
@@ -321,8 +578,14 @@ function bindLiveInput(id, path) {
   };
 }
 
-function exerciseChip(sets, reps) {
-  return `<span class="font-mono2 bg-stone-900 text-lime-300 text-xs px-2 py-1 rounded-md">${esc(sets)||'-'}×${esc(reps)||'-'}</span>`;
+function exerciseMetaLine(r) {
+  const parts = [];
+  if (r['組數']) parts.push(`${esc(r['組數'])} 組`);
+  if (r['次數']) parts.push(`${esc(r['次數'])} 下`);
+  if (r['重量']) parts.push(`${esc(r['重量'])} kg`);
+  if (r['秒數']) parts.push(`${esc(r['秒數'])} 秒`);
+  if (parts.length === 0) return '';
+  return `<div class="exercise-meta">${parts.join(' · ')}</div>`;
 }
 
 function exerciseRowHtml(r) {
@@ -330,36 +593,36 @@ function exerciseRowHtml(r) {
   const busy = state.savingId === r.ID;
   if (isEditing) {
     return `
-    <div class="border border-lime-300 bg-lime-50 rounded-xl p-3 space-y-2">
-      <input id="edit-exercise" value="${esc(state.editDraft.exercise)}" class="w-full border border-stone-300 rounded-lg px-2.5 py-1.5 text-sm" placeholder="動作名稱" />
-      <div class="flex gap-2">
-        <input id="edit-sets" value="${esc(state.editDraft.sets)}" class="w-1/2 border border-stone-300 rounded-lg px-2.5 py-1.5 text-sm" placeholder="組數" />
-        <input id="edit-reps" value="${esc(state.editDraft.reps)}" class="w-1/2 border border-stone-300 rounded-lg px-2.5 py-1.5 text-sm" placeholder="次數" />
+    <div class="edit-card">
+      <div class="field"><input id="edit-exercise" type="text" value="${esc(state.editDraft.exercise)}" placeholder="動作名稱" /></div>
+      <div class="row2 field">
+        <input id="edit-sets" type="number" inputmode="numeric" value="${esc(state.editDraft.sets)}" placeholder="組數(選填)" />
+        <input id="edit-reps" type="number" inputmode="numeric" value="${esc(state.editDraft.reps)}" placeholder="次數(選填)" />
       </div>
-      <textarea id="edit-notes" rows="2" class="w-full border border-stone-300 rounded-lg px-2.5 py-1.5 text-sm" placeholder="備注">${esc(state.editDraft.notes)}</textarea>
-      <div class="flex gap-2 justify-end">
-        <button onclick="cancelEdit()" class="text-xs px-3 py-1.5 rounded-lg text-stone-500">取消</button>
-        <button onclick="saveEdit('${r.ID}')" ${busy?'disabled':''} class="text-xs px-3 py-1.5 rounded-lg bg-stone-900 text-lime-300 flex items-center gap-1">
-          <i data-lucide="${busy?'loader-2':'check'}" style="width:12px;height:12px" class="${busy?'animate-spin':''}"></i>儲存
+      <div class="row2 field">
+        <input id="edit-weight" type="number" inputmode="decimal" value="${esc(state.editDraft.weight)}" placeholder="重量 kg(選填)" />
+        <input id="edit-duration" type="number" inputmode="numeric" value="${esc(state.editDraft.duration)}" placeholder="秒數(選填)" />
+      </div>
+      <div class="field"><textarea id="edit-notes" rows="2" placeholder="備注">${esc(state.editDraft.notes)}</textarea></div>
+      <div class="btn-row" style="justify-content:flex-end">
+        <button onclick="cancelEdit()" class="btn-text">取消</button>
+        <button onclick="saveEdit('${r.ID}')" ${busy?'disabled':''} class="btn-secondary" style="background:#159C93;color:#fff;border-color:#159C93;">
+          ${ic(busy?'loader':'check', 14, busy)}儲存
         </button>
       </div>
     </div>`;
   }
   return `
-  <div class="border border-stone-200 bg-white rounded-xl p-3">
-    <div class="flex items-start justify-between gap-2">
-      <div class="flex-1 min-w-0">
-        <div class="flex items-center gap-2 flex-wrap">
-          <span class="font-medium text-sm">${esc(r['動作名稱'])}</span>
-          ${exerciseChip(r['組數'], r['次數'])}
-        </div>
-        ${r['備注'] ? `<p class="text-xs text-stone-500 mt-1.5 leading-relaxed">備注:${esc(r['備注'])}</p>` : ''}
+  <div class="exercise-card">
+    <div class="exercise-top">
+      <div style="flex:1;min-width:0;">
+        <div class="exercise-name">${esc(r['動作名稱'])}</div>
+        ${exerciseMetaLine(r)}
+        ${r['備注'] ? `<div class="exercise-note">備注:${esc(r['備注'])}</div>` : ''}
       </div>
-      <div class="flex items-center gap-1 shrink-0">
-        <button onclick='startEdit(${JSON.stringify(r).replace(/'/g,"&#39;")})' class="p-1.5 text-stone-400"><i data-lucide="pencil" style="width:14px;height:14px"></i></button>
-        <button onclick="deleteExercise('${r.ID}')" ${busy?'disabled':''} class="p-1.5 text-stone-400">
-          <i data-lucide="${busy?'loader-2':'trash-2'}" style="width:14px;height:14px" class="${busy?'animate-spin':''}"></i>
-        </button>
+      <div class="exercise-actions">
+        <button onclick='startEdit(${JSON.stringify(r).replace(/'/g,"&#39;")})' class="icon-btn">${ic('pencil',16)}</button>
+        <button onclick="deleteExercise('${r.ID}')" ${busy?'disabled':''} class="icon-btn">${ic(busy?'loader':'trash',16,busy)}</button>
       </div>
     </div>
   </div>`;
@@ -367,67 +630,72 @@ function exerciseRowHtml(r) {
 
 function renderSetup() {
   return `
-  <div class="p-5">
-    <div class="bg-white border border-stone-200 rounded-2xl p-5">
-      <h2 class="font-display font-bold text-lg mb-1">先連接你的 Google Sheets</h2>
-      <p class="text-sm text-stone-500 mb-4">貼上 Apps Script 部署後拿到的網址(格式類似 https://script.google.com/macros/s/xxxx/exec)</p>
-      <input id="setup-url" value="${esc(state.urlDraft)}" placeholder="https://script.google.com/macros/s/.../exec" class="w-full border border-stone-300 rounded-xl px-3 py-2.5 text-sm mb-3" />
-      <button onclick="saveUrl()" class="w-full bg-stone-900 text-lime-300 rounded-xl py-2.5 font-medium text-sm">儲存並開始使用</button>
+  <div class="content">
+    <div class="card">
+      <h2 class="setup-title">先連接你的 Google Sheets</h2>
+      <p class="setup-desc">貼上 Apps Script 部署後拿到的網址(格式類似 https://script.google.com/macros/s/xxxx/exec)</p>
+      <div class="field"><input id="setup-url" type="text" value="${esc(state.urlDraft)}" placeholder="https://script.google.com/macros/s/.../exec" /></div>
+      <button onclick="saveUrl()" class="btn-primary">儲存並開始使用</button>
     </div>
   </div>`;
 }
 
 function renderLog() {
+  syncSessionMetaFromRows();
   const exercises = getCurrentSessionExercises();
   return `
-  <div class="p-4 space-y-4">
-    <div class="bg-white border border-stone-200 rounded-2xl p-4">
-      <h3 class="text-xs font-semibold text-stone-400 uppercase tracking-wide mb-3">課表基本資料</h3>
-      <div class="space-y-3">
-        <div>
-          <label class="text-xs text-stone-500 mb-1 flex items-center gap-1"><i data-lucide="users" style="width:12px;height:12px"></i> 學生</label>
-          ${state.roster.length === 0
-            ? `<p class="text-xs text-rose-500">尚未新增學生,請到「設定」加入學生名單</p>`
-            : `<div class="flex flex-wrap gap-1.5">${state.roster.map(name => `
-              <button onclick="selectStudent('${esc(name).replace(/'/g,"&#39;")}')" class="px-3 py-1.5 rounded-full text-sm border ${state.session.student===name ? 'bg-stone-900 text-lime-300 border-stone-900' : 'border-stone-300 text-stone-600'}">${esc(name)}</button>
-            `).join('')}</div>`}
-        </div>
-        <div>
-          <label class="text-xs text-stone-500 mb-1 flex items-center gap-1"><i data-lucide="calendar" style="width:12px;height:12px"></i> 日期</label>
-          <input type="date" value="${esc(state.session.date)}" onchange="onDateChange(this.value)" class="border border-stone-300 rounded-lg px-3 py-1.5 text-sm" />
-        </div>
-        <div>
-          <label class="text-xs text-stone-500 mb-1 block">訓練目的</label>
-          <input id="purpose-input" value="${esc(state.session.purpose)}" placeholder="例如:增肌、減脂..." class="w-full border border-stone-300 rounded-lg px-3 py-1.5 text-sm mb-2" />
-          <div class="flex flex-wrap gap-1.5">${PURPOSE_CHIPS.map(p => `<button onclick="selectPurpose('${p}')" class="px-2.5 py-1 rounded-full text-xs bg-stone-100 text-stone-500">${p}</button>`).join('')}</div>
-        </div>
+  <div class="content">
+    <div class="card">
+      <h3 class="card-title">課表基本資料</h3>
+      <div class="field">
+        <div class="field-label">${ic('users',14)} 學生</div>
+        ${state.roster.length === 0
+          ? `<p style="color:#C0392B;font-size:14px;margin:0;">尚未新增學生,請到「設定」加入學生名單</p>`
+          : `<div class="chip-row">${state.roster.map(s => `
+            <button onclick="selectStudent('${esc(s.name).replace(/'/g,"&#39;")}')" class="chip ${state.session.student===s.name?'selected':''}">${esc(s.name)}</button>
+          `).join('')}</div>`}
+      </div>
+      <div class="field">
+        <div class="field-label">${ic('calendar',14)} 日期</div>
+        <input type="date" value="${esc(state.session.date)}" onchange="onDateChange(this.value)" style="width:auto;" />
+      </div>
+      <div class="field">
+        <div class="field-label">訓練目的</div>
+        <input id="purpose-input" type="text" value="${esc(state.session.purpose)}" placeholder="例如:增肌、減脂..." style="margin-bottom:8px;" />
+        <div class="chip-row">${PURPOSE_CHIPS.map(p => `<button onclick="selectPurpose('${p}')" class="chip-sm">${p}</button>`).join('')}</div>
+      </div>
+      <div class="field">
+        <div class="field-label">本堂備註 <span class="field-hint">(整堂課的總結,下課後填就好)</span></div>
+        <textarea id="session-note-input" rows="2" placeholder="例如:今天出席狀況、下堂課要注意的地方...">${esc(state.session.sessionNote)}</textarea>
       </div>
     </div>
 
-    <div class="bg-white border border-stone-200 rounded-2xl p-4">
-      <h3 class="text-xs font-semibold text-stone-400 uppercase tracking-wide mb-3">新增動作</h3>
-      <div class="space-y-2">
-        <input id="ex-name" value="${esc(state.exerciseForm.name)}" placeholder="動作名稱,例如:深蹲" class="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm" />
-        <div class="flex gap-2">
-          <input id="ex-sets" value="${esc(state.exerciseForm.sets)}" inputmode="numeric" placeholder="組數" class="w-1/2 border border-stone-300 rounded-lg px-3 py-2 text-sm" />
-          <input id="ex-reps" value="${esc(state.exerciseForm.reps)}" inputmode="numeric" placeholder="次數" class="w-1/2 border border-stone-300 rounded-lg px-3 py-2 text-sm" />
-        </div>
-        <textarea id="ex-notes" rows="2" placeholder="備注(訓練狀況、重量、感受...)" class="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm">${esc(state.exerciseForm.notes)}</textarea>
-        <button onclick="submitExercise()" ${state.savingId==='new'?'disabled':''} class="w-full bg-lime-400 text-stone-900 rounded-lg py-2.5 font-semibold text-sm flex items-center justify-center gap-1.5 disabled:opacity-50">
-          <i data-lucide="${state.savingId==='new'?'loader-2':'plus'}" style="width:16px;height:16px" class="${state.savingId==='new'?'animate-spin':''}"></i>記錄這個動作
-        </button>
+    <div class="card">
+      <h3 class="card-title">新增動作</h3>
+      <div class="field"><input id="ex-name" type="text" value="${esc(state.exerciseForm.name)}" placeholder="動作名稱,例如:深蹲" /></div>
+      <div class="row2 field">
+        <input id="ex-sets" type="number" inputmode="numeric" value="${esc(state.exerciseForm.sets)}" placeholder="組數(選填)" />
+        <input id="ex-reps" type="number" inputmode="numeric" value="${esc(state.exerciseForm.reps)}" placeholder="次數(選填)" />
       </div>
+      <div class="row2 field">
+        <input id="ex-weight" type="number" inputmode="decimal" value="${esc(state.exerciseForm.weight)}" placeholder="重量 kg(選填)" />
+        <input id="ex-duration" type="number" inputmode="numeric" value="${esc(state.exerciseForm.duration)}" placeholder="秒數(選填)" />
+      </div>
+      <div class="field"><textarea id="ex-notes" rows="2" placeholder="備注(這個動作當下的狀況、感受...)">${esc(state.exerciseForm.notes)}</textarea></div>
+      <button onclick="submitExercise()" ${state.savingId==='new'?'disabled':''} class="btn-primary">
+        ${ic(state.savingId==='new'?'loader':'plus', 18, state.savingId==='new')}記錄這個動作
+      </button>
     </div>
 
     ${state.session.student && state.session.date ? `
-    <div>
-      <h3 class="text-xs font-semibold text-stone-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+    <div class="block" style="margin-top:16px;">
+      <h3 class="card-title" style="display:flex;align-items:center;gap:6px;">
         ${esc(state.session.student)} · ${fmtDate(state.session.date)} 的課表
-        ${state.loadingRows ? '<i data-lucide="loader-2" style="width:12px;height:12px" class="animate-spin"></i>' : ''}
+        ${state.loadingRows ? ic('loader',14,true) : ''}
       </h3>
       ${exercises.length === 0
-        ? `<p class="text-sm text-stone-400 py-4 text-center">還沒有動作,新增第一個吧</p>`
-        : `<div class="space-y-2">${exercises.map(exerciseRowHtml).join('')}</div>`}
+        ? `<p class="empty-state">還沒有動作,新增第一個吧</p>`
+        : exercises.map(exerciseRowHtml).join('')}
     </div>` : ''}
   </div>`;
 }
@@ -436,67 +704,182 @@ function renderHistory() {
   if (state.selectedSessionKey) {
     const s = getSessions().find(x => x.key === state.selectedSessionKey);
     if (!s) { state.selectedSessionKey = null; return renderHistory(); }
+    const vol = getSessionVolume(s.exercises);
     return `
-    <div class="p-4">
-      <button onclick="backToHistory()" class="flex items-center gap-1 text-sm text-stone-500 mb-3">
-        <i data-lucide="chevron-left" style="width:16px;height:16px"></i>返回列表
-      </button>
-      <div class="bg-stone-900 text-stone-50 rounded-2xl p-4 mb-3">
-        <div class="font-display text-lg font-bold">${esc(s.student)}</div>
-        <div class="text-stone-400 text-sm mt-0.5">${fmtDate(s.date)} · ${esc(s.purpose)||'未填寫目的'}</div>
+    <div class="content">
+      <button onclick="backToHistory()" class="back-link">${ic('chevronLeft',18)}返回列表</button>
+      <div class="session-header">
+        <div class="session-header-top">
+          <div class="session-name">${esc(s.student)}</div>
+          ${s.purpose ? `<span class="tag-purpose">${esc(s.purpose)}</span>` : ''}
+        </div>
+        <div class="session-date">${fmtDate(s.date)}${vol > 0 ? ` · 訓練容量 <span class="mono" style="color:#159C93;font-weight:600;">${vol.toLocaleString()} kg</span>` : ''}</div>
+        ${s.sessionNote ? `<div class="session-note">本堂備註:${esc(s.sessionNote)}</div>` : ''}
       </div>
-      <div class="space-y-2 mb-3">${s.exercises.map(exerciseRowHtml).join('')}</div>
-      <button onclick="jumpToSession('${s.key.replace(/'/g,"&#39;")}')" class="w-full bg-lime-400 text-stone-900 rounded-lg py-2.5 font-semibold text-sm flex items-center justify-center gap-1.5">
-        <i data-lucide="plus" style="width:16px;height:16px"></i>在這堂繼續新增動作
+      ${s.exercises.map(exerciseRowHtml).join('')}
+      <button onclick="jumpToSession('${s.key.replace(/'/g,"&#39;")}')" class="btn-primary" style="margin-top:12px;">
+        ${ic('plus',18)}在這堂繼續新增動作
       </button>
     </div>`;
   }
-  const sessions = getSessions();
+
   return `
-  <div class="p-4">
-    <h3 class="text-xs font-semibold text-stone-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-      歷史紀錄 ${state.loadingRows ? '<i data-lucide="loader-2" style="width:12px;height:12px" class="animate-spin"></i>' : ''}
-    </h3>
-    ${sessions.length === 0
-      ? `<p class="text-sm text-stone-400 py-8 text-center">還沒有任何紀錄</p>`
-      : `<div class="space-y-2">${sessions.map(s => `
-        <button onclick="selectSession('${s.key.replace(/'/g,"&#39;")}')" class="w-full text-left bg-white border border-stone-200 rounded-xl p-3.5 flex items-center justify-between relative overflow-hidden">
-          <div class="absolute left-0 top-0 bottom-0 w-1 bg-lime-400"></div>
-          <div class="pl-2">
-            <div class="font-medium text-sm">${esc(s.student)}</div>
-            <div class="text-xs text-stone-400 mt-0.5">${fmtDate(s.date)} · ${s.exercises.length} 個動作</div>
-          </div>
-          <div class="font-mono2 text-sm text-stone-500 pl-2 shrink-0">${fmtTime(s.latest)}</div>
-        </button>
-      `).join('')}</div>`}
+  <div class="content">
+    <div class="card">
+      <div class="field" style="margin-bottom:${state.roster.length ? '10px' : '0'};">
+        <input id="history-search" type="text" value="${esc(state.historySearch)}" placeholder="搜尋學生姓名..." />
+      </div>
+      ${state.roster.length ? `<div class="chip-row">${state.roster.map(s => `<button onclick="tapHistoryStudent('${esc(s.name).replace(/'/g,"&#39;")}')" class="chip-sm">${esc(s.name)}</button>`).join('')}</div>` : ''}
+    </div>
+    <div id="history-results" style="margin-top:16px;">${renderHistoryResults()}</div>
   </div>`;
+}
+
+function tapHistoryStudent(name) {
+  state.historySearch = state.historySearch === name ? '' : name;
+  render();
+}
+
+function renderHistoryResults() {
+  const q = state.historySearch.trim();
+  let sessions = getSessions();
+  if (q) sessions = sessions.filter(s => s.student.includes(q));
+
+  // 如果搜尋文字剛好完全對到一位學生,上面顯示整體訓練量摘要 + 趨勢
+  const exactStudent = state.roster.find(s => s.name === q);
+  let summaryHtml = '';
+  if (exactStudent) {
+    const series = getStudentVolumeSeries(q);
+    const total = series.reduce((s, x) => s + x.volume, 0);
+    const avg = series.length ? Math.round(total / series.length) : 0;
+    const max = Math.max(1, ...series.map(x => x.volume));
+    summaryHtml = `
+    <div class="card" style="margin-bottom:12px;">
+      <h3 class="card-title">${esc(q)} 的整體訓練量</h3>
+      <p style="font-size:13px;color:#6E8C89;margin:-4px 0 14px;">訓練容量 = 組數 × 次數 × 重量,只計算有填重量的動作</p>
+      <div style="display:flex;gap:32px;margin-bottom:${series.length ? '16px' : '0'};">
+        <div>
+          <div class="font-display mono" style="font-size:24px;font-weight:700;color:#233330;">${total.toLocaleString()}</div>
+          <div style="font-size:13px;color:#6E8C89;margin-top:2px;">總訓練容量(kg)</div>
+        </div>
+        <div>
+          <div class="font-display mono" style="font-size:24px;font-weight:700;color:#233330;">${avg.toLocaleString()}</div>
+          <div style="font-size:13px;color:#6E8C89;margin-top:2px;">平均每堂(kg)</div>
+        </div>
+      </div>
+      ${series.length ? series.map(x => `
+        <div style="margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;font-size:13px;color:#6E8C89;margin-bottom:3px;">
+            <span>${fmtDate(x.date)}</span><span class="mono">${x.volume.toLocaleString()} kg</span>
+          </div>
+          <div style="background:#DCEEEC;border-radius:6px;height:9px;overflow:hidden;">
+            <div style="background:#159C93;height:100%;width:${Math.max(4, x.volume / max * 100)}%;border-radius:6px;"></div>
+          </div>
+        </div>
+      `).join('') : ''}
+    </div>`;
+  }
+
+  const listHtml = sessions.length === 0
+    ? `<p class="empty-state">${q ? '找不到符合的紀錄' : '還沒有任何紀錄'}</p>`
+    : sessions.map(s => {
+        const vol = getSessionVolume(s.exercises);
+        return `
+      <button onclick="selectSession('${s.key.replace(/'/g,"&#39;")}')" class="history-item">
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+            <span class="history-name">${esc(s.student)}</span>
+            ${s.purpose ? `<span class="tag-purpose">${esc(s.purpose)}</span>` : ''}
+          </div>
+          <div class="history-sub">${fmtDate(s.date)} · ${s.exercises.length} 個動作</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;padding-left:10px;">
+          ${vol > 0 ? `<div class="mono" style="font-weight:700;color:#159C93;font-size:15px;">${vol.toLocaleString()}kg</div>` : ''}
+          <div class="history-time mono" style="margin-top:2px;">${fmtTime(s.latest)}</div>
+        </div>
+      </button>
+    `;
+      }).join('');
+
+  return summaryHtml + listHtml;
 }
 
 function renderSettings() {
   return `
-  <div class="p-4 space-y-4">
-    <div class="bg-white border border-stone-200 rounded-2xl p-4">
-      <h3 class="text-xs font-semibold text-stone-400 uppercase tracking-wide mb-3">Google Sheets 連接</h3>
-      <input id="settings-url" value="${esc(state.urlDraft)}" placeholder="https://script.google.com/macros/s/.../exec" class="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm mb-2" />
-      <div class="flex gap-2">
-        <button onclick="saveUrl()" class="flex-1 bg-stone-900 text-lime-300 rounded-lg py-2 text-sm font-medium">儲存網址</button>
-        <button onclick="fetchRows()" class="px-3 py-2 border border-stone-300 rounded-lg text-sm flex items-center gap-1">
-          ${state.loadingRows ? '<i data-lucide="loader-2" style="width:14px;height:14px" class="animate-spin"></i>' : '重新整理'}
+  <div class="content">
+    <div class="card">
+      <h3 class="card-title">Google Sheets 連接</h3>
+      <div class="field"><input id="settings-url" type="text" value="${esc(state.urlDraft)}" placeholder="https://script.google.com/macros/s/.../exec" /></div>
+      <div class="btn-row">
+        <button onclick="saveUrl()" class="btn-primary" style="flex:1;">儲存網址</button>
+        <button onclick="fetchRows()" class="btn-secondary">
+          ${state.loadingRows ? ic('loader',16,true) : '重新整理'}
         </button>
       </div>
     </div>
-    <div class="bg-white border border-stone-200 rounded-2xl p-4">
-      <h3 class="text-xs font-semibold text-stone-400 uppercase tracking-wide mb-3">學生名單(${state.roster.length})</h3>
-      <div class="flex gap-2 mb-3">
-        <input id="new-student" value="${esc(state.newStudent)}" placeholder="輸入學生姓名" class="flex-1 border border-stone-300 rounded-lg px-3 py-2 text-sm" onkeydown="if(event.key==='Enter')addStudent()" />
-        <button onclick="addStudent()" class="px-3 py-2 bg-lime-400 text-stone-900 rounded-lg"><i data-lucide="plus" style="width:16px;height:16px"></i></button>
+    <div class="card">
+      <h3 class="card-title">學生目錄(${state.roster.length})</h3>
+      <div class="field"><input id="new-student-name" type="text" value="${esc(state.newStudent.name)}" placeholder="姓名" /></div>
+      <div class="row2 field">
+        <select id="new-student-gender" style="width:100%;border:1px solid #D3EBE8;border-radius:10px;padding:11px 14px;font-size:16px;color:#233330;background:#fff;font-family:inherit;">
+          <option value="" ${state.newStudent.gender===''?'selected':''}>性別(選填)</option>
+          <option value="女" ${state.newStudent.gender==='女'?'selected':''}>女</option>
+          <option value="男" ${state.newStudent.gender==='男'?'selected':''}>男</option>
+          <option value="其他" ${state.newStudent.gender==='其他'?'selected':''}>其他</option>
+        </select>
+        <input id="new-student-birthday" type="date" value="${esc(state.newStudent.birthday)}" />
       </div>
-      <div class="flex flex-wrap gap-1.5">${state.roster.map(name => `
-        <span class="flex items-center gap-1 bg-stone-100 text-stone-700 text-sm px-2.5 py-1 rounded-full">
-          ${esc(name)}
-          <button onclick="removeStudent('${esc(name).replace(/'/g,"&#39;")}')" class="text-stone-400"><i data-lucide="x" style="width:12px;height:12px"></i></button>
-        </span>
-      `).join('')}</div>
+      <button onclick="addStudent()" class="btn-primary" style="margin-bottom:${state.roster.length?'16px':'0'};">${ic('plus',18)}新增學生</button>
+
+      ${state.roster.map(s => {
+        const isEditing = state.editingStudent === s.name;
+        const age = calcAge(s.birthday);
+        const isExpanded = state.expandedMaxWeights === s.name;
+        const maxWeights = isExpanded ? getStudentMaxWeights(s.name) : [];
+        if (isEditing) {
+          return `
+          <div class="edit-card" style="margin-bottom:10px;">
+            <div class="field"><input id="student-edit-name" type="text" value="${esc(state.studentEditDraft.name)}" placeholder="姓名" /></div>
+            <div class="row2 field">
+              <select id="student-edit-gender" style="width:100%;border:1px solid #D3EBE8;border-radius:10px;padding:11px 14px;font-size:16px;color:#233330;background:#fff;font-family:inherit;">
+                <option value="" ${state.studentEditDraft.gender===''?'selected':''}>性別(選填)</option>
+                <option value="女" ${state.studentEditDraft.gender==='女'?'selected':''}>女</option>
+                <option value="男" ${state.studentEditDraft.gender==='男'?'selected':''}>男</option>
+                <option value="其他" ${state.studentEditDraft.gender==='其他'?'selected':''}>其他</option>
+              </select>
+              <input id="student-edit-birthday" type="date" value="${esc(state.studentEditDraft.birthday)}" />
+            </div>
+            <div class="btn-row" style="justify-content:flex-end;">
+              <button onclick="cancelEditStudent()" class="btn-text">取消</button>
+              <button onclick="saveEditStudent('${esc(s.name).replace(/'/g,"&#39;")}')" class="btn-secondary" style="background:#159C93;color:#fff;border-color:#159C93;">${ic('check',14)}儲存</button>
+            </div>
+          </div>`;
+        }
+        return `
+        <div class="exercise-card" style="margin-bottom:10px;">
+          <div class="exercise-top">
+            <div style="flex:1;min-width:0;">
+              <div class="exercise-name">${esc(s.name)}</div>
+              <div class="exercise-meta" style="font-family:inherit;">${[s.gender, age !== null ? age + ' 歲' : ''].filter(Boolean).join(' · ') || '尚未填寫性別/生日'}</div>
+            </div>
+            <div class="exercise-actions">
+              <button onclick='startEditStudent(${JSON.stringify(s).replace(/'/g,"&#39;")})' class="icon-btn">${ic('pencil',16)}</button>
+              <button onclick="removeStudent('${esc(s.name).replace(/'/g,"&#39;")}')" class="icon-btn">${ic('trash',16)}</button>
+            </div>
+          </div>
+          <button onclick="toggleMaxWeights('${esc(s.name).replace(/'/g,"&#39;")}')" class="btn-text" style="padding:8px 0 0;">
+            ${ic(isExpanded?'chevronLeft':'trend', 14)}${isExpanded ? '收起' : '查看各動作最大重量'}
+          </button>
+          ${isExpanded ? (maxWeights.length === 0
+            ? `<p style="font-size:13px;color:#9BB5B2;margin:6px 0 0;">還沒有帶重量的紀錄</p>`
+            : `<div style="margin-top:8px;display:flex;flex-direction:column;gap:6px;">${maxWeights.map(m => `
+              <div style="display:flex;justify-content:space-between;font-size:14px;">
+                <span style="color:#233330;">${esc(m.exercise)}</span>
+                <span class="mono" style="color:#159C93;font-weight:600;">${m.maxWeight.toLocaleString()} kg</span>
+              </div>
+            `).join('')}</div>`) : ''}
+        </div>`;
+      }).join('')}
     </div>
   </div>`;
 }
@@ -509,9 +892,7 @@ function render() {
     html = renderSetup();
   } else {
     if (state.fetchError) {
-      html += `<div class="mx-4 mt-4 flex items-start gap-2 bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-xl p-3">
-        <i data-lucide="alert-circle" style="width:16px;height:16px" class="mt-0.5 shrink-0"></i><span>${esc(state.fetchError)}</span>
-      </div>`;
+      html += `<div class="alert-error">${ic('alert',18)}<span>${esc(state.fetchError)}</span></div>`;
     }
     if (state.tab === 'log') html += renderLog();
     else if (state.tab === 'history') html += renderHistory();
@@ -520,30 +901,48 @@ function render() {
 
   app.innerHTML = html;
 
-  // nav active states
+  document.getElementById('header-icon').innerHTML = ic('dumbbell', 26);
+  document.getElementById('nav-log').innerHTML = ic('plus',22) + '<span>新增紀錄</span>';
+  document.getElementById('nav-history').innerHTML = ic('clipboard',22) + '<span>歷史紀錄</span>';
+  document.getElementById('nav-settings').innerHTML = ic('settings',22) + '<span>設定</span>';
   ['log','history','settings'].forEach(t => {
-    const el = document.getElementById('nav-' + t);
-    if (!el) return;
-    el.className = 'nav-btn flex flex-col items-center gap-1 px-4 py-1 rounded-lg ' + (state.tab === t ? 'text-stone-900' : 'text-stone-400');
-    const icon = el.querySelector('i');
-    if (icon) icon.style.color = state.tab === t ? '#84cc16' : '';
+    document.getElementById('nav-' + t).classList.toggle('active', state.tab === t);
   });
 
-  // rebind live inputs
   bindLiveInput('setup-url', 'urlDraft');
   bindLiveInput('settings-url', 'urlDraft');
   bindLiveInput('purpose-input', 'session.purpose');
+  bindLiveInput('session-note-input', 'session.sessionNote');
   bindLiveInput('ex-name', 'exerciseForm.name');
   bindLiveInput('ex-sets', 'exerciseForm.sets');
   bindLiveInput('ex-reps', 'exerciseForm.reps');
+  bindLiveInput('ex-weight', 'exerciseForm.weight');
+  bindLiveInput('ex-duration', 'exerciseForm.duration');
   bindLiveInput('ex-notes', 'exerciseForm.notes');
-  bindLiveInput('new-student', 'newStudent');
+  bindLiveInput('new-student-name', 'newStudent.name');
+  bindLiveInput('new-student-gender', 'newStudent.gender');
+  bindLiveInput('new-student-birthday', 'newStudent.birthday');
+  bindLiveInput('student-edit-name', 'studentEditDraft.name');
+  bindLiveInput('student-edit-gender', 'studentEditDraft.gender');
+  bindLiveInput('student-edit-birthday', 'studentEditDraft.birthday');
   bindLiveInput('edit-exercise', 'editDraft.exercise');
   bindLiveInput('edit-sets', 'editDraft.sets');
   bindLiveInput('edit-reps', 'editDraft.reps');
+  bindLiveInput('edit-weight', 'editDraft.weight');
+  bindLiveInput('edit-duration', 'editDraft.duration');
   bindLiveInput('edit-notes', 'editDraft.notes');
+  bindHistorySearch();
+}
 
-  icons();
+// 歷史紀錄搜尋框:即時篩選但只更新結果區塊,不整頁重繪,避免打字打到一半失焦
+function bindHistorySearch() {
+  const el = document.getElementById('history-search');
+  if (!el) return;
+  el.oninput = (e) => {
+    state.historySearch = e.target.value;
+    const results = document.getElementById('history-results');
+    if (results) results.innerHTML = renderHistoryResults();
+  };
 }
 
 render();
