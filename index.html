@@ -264,6 +264,17 @@ function todayStr() {
   const tz = d.getTimezoneOffset() * 60000;
   return new Date(d - tz).toISOString().slice(0, 10);
 }
+// 不管 Sheets 回來的日期是純文字 "2026-07-10" 還是不小心被轉成完整時間戳記,
+// 都統一轉成 YYYY-MM-DD,確保分組、篩選、加總不會因為格式不一致而失效
+function normalizeDateStr(d) {
+  if (!d) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+  const dt = new Date(d);
+  if (isNaN(dt)) return d;
+  const tz = dt.getTimezoneOffset() * 60000;
+  return new Date(dt - tz).toISOString().slice(0, 10);
+}
+
 function fmtDate(dateStr) {
   if (!dateStr) return '';
   const d = new Date(dateStr + 'T00:00:00');
@@ -305,7 +316,7 @@ async function fetchRows() {
     const res = await fetch(state.sheetUrl, { method: 'GET' });
     const data = await res.json();
     if (data.status === 'ok') {
-      state.rows = data.data || [];
+      state.rows = (data.data || []).map(r => ({ ...r, '日期': normalizeDateStr(r['日期']) }));
     } else {
       state.fetchError = data.message || '讀取失敗';
     }
@@ -327,7 +338,11 @@ function saveUrl() {
 
 function addStudent() {
   const name = state.newStudent.name.trim();
-  if (!name || state.roster.some(s => s.name === name)) return;
+  if (!name) return;
+  if (state.roster.some(s => s.name === name)) {
+    showToast('已經有學生叫這個名字了');
+    return;
+  }
   state.roster.push({ name, gender: state.newStudent.gender, birthday: state.newStudent.birthday });
   state.newStudent = { name: '', gender: '', birthday: '' };
   saveRoster();
@@ -344,16 +359,40 @@ function startEditStudent(s) {
   render();
 }
 function cancelEditStudent() { state.editingStudent = null; render(); }
-function saveEditStudent(originalName) {
+async function saveEditStudent(originalName) {
   const newName = state.studentEditDraft.name.trim();
   if (!newName) { showToast('姓名不能空白'); return; }
+  if (newName !== originalName && state.roster.some(s => s.name === newName)) {
+    showToast('已經有學生叫這個名字了,請先處理重複的名字');
+    return;
+  }
+  const nameChanged = newName !== originalName;
   state.roster = state.roster.map(s => s.name === originalName ? { name: newName, gender: state.studentEditDraft.gender, birthday: state.studentEditDraft.birthday } : s);
-  // 如果改了姓名,同步更新目前選取中的學生跟歷史搜尋文字,避免對不上
   if (state.session.student === originalName) state.session.student = newName;
   if (state.historySearch === originalName) state.historySearch = newName;
   state.editingStudent = null;
   saveRoster();
   render();
+
+  if (nameChanged && state.sheetUrl) {
+    try {
+      const res = await fetch(state.sheetUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'renameStudent', oldName: originalName, newName }),
+      });
+      const data = await res.json();
+      if (data.status === 'ok') {
+        state.rows = state.rows.map(r => r['學生姓名'] === originalName ? { ...r, '學生姓名': newName } : r);
+        render();
+        if (data.updated > 0) showToast(`已同步更新 ${data.updated} 筆歷史紀錄的姓名`);
+      } else {
+        showToast('姓名已改,但歷史紀錄同步失敗,請確認 Apps Script 是否為最新版');
+      }
+    } catch (e) {
+      showToast('姓名已改,但歷史紀錄同步失敗(連線問題)');
+    }
+  }
 }
 function toggleMaxWeights(name) {
   state.expandedMaxWeights = state.expandedMaxWeights === name ? null : name;
