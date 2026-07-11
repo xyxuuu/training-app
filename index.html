@@ -71,13 +71,19 @@
   }
   .field-hint { color: #9BB5B2; font-weight: 400; }
 
-  input[type=text], input[type=date], input[type=number], textarea {
+  input[type=text], input[type=date], input[type=number], textarea, select {
     width: 100%; border: 1px solid #D3EBE8; border-radius: 10px; padding: 11px 14px;
     font-size: 16px; color: #233330; background: #fff; font-family: inherit;
     text-align: left;
   }
+  select {
+    appearance: none; -webkit-appearance: none; -moz-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236E8C89' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 12px center; background-size: 18px;
+    padding-right: 38px;
+  }
   textarea { resize: vertical; }
-  input:focus, textarea:focus {
+  input:focus, textarea:focus, select:focus {
     outline: none; border-color: #159C93; box-shadow: 0 0 0 3px rgba(21,156,147,0.15);
   }
   input::placeholder, textarea::placeholder { color: #9BB5B2; }
@@ -349,6 +355,8 @@ function addStudent() {
   render();
 }
 function removeStudent(name) {
+  const ok = confirm(`確定要把「${name}」從學生目錄移除嗎?\n\n(他過去的訓練紀錄不會被刪除,只是這裡的快速選單不會再顯示他,之後要用可以再加回來)`);
+  if (!ok) return;
   state.roster = state.roster.filter(s => s.name !== name);
   saveRoster();
   render();
@@ -573,6 +581,7 @@ async function saveEdit(id) {
   }
 }
 async function deleteExercise(id) {
+  if (!confirm('確定要刪除這筆動作紀錄嗎?這會直接從 Google Sheets 永久刪除,無法復原。')) return;
   state.savingId = id;
   render();
   try {
@@ -884,7 +893,7 @@ function renderSettings() {
       <h3 class="card-title">學生目錄(${state.roster.length})</h3>
       <div class="field"><input id="new-student-name" type="text" value="${esc(state.newStudent.name)}" placeholder="姓名" /></div>
       <div class="row2 field">
-        <select id="new-student-gender" style="width:100%;border:1px solid #D3EBE8;border-radius:10px;padding:11px 14px;font-size:16px;color:#233330;background:#fff;font-family:inherit;">
+        <select id="new-student-gender">
           <option value="" ${state.newStudent.gender===''?'selected':''}>性別(選填)</option>
           <option value="女" ${state.newStudent.gender==='女'?'selected':''}>女</option>
           <option value="男" ${state.newStudent.gender==='男'?'selected':''}>男</option>
@@ -904,7 +913,7 @@ function renderSettings() {
           <div class="edit-card" style="margin-bottom:10px;">
             <div class="field"><input id="student-edit-name" type="text" value="${esc(state.studentEditDraft.name)}" placeholder="姓名" /></div>
             <div class="row2 field">
-              <select id="student-edit-gender" style="width:100%;border:1px solid #D3EBE8;border-radius:10px;padding:11px 14px;font-size:16px;color:#233330;background:#fff;font-family:inherit;">
+              <select id="student-edit-gender">
                 <option value="" ${state.studentEditDraft.gender===''?'selected':''}>性別(選填)</option>
                 <option value="女" ${state.studentEditDraft.gender==='女'?'selected':''}>女</option>
                 <option value="男" ${state.studentEditDraft.gender==='男'?'selected':''}>男</option>
