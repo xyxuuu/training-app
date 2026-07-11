@@ -251,6 +251,7 @@ const state = {
   editDraft: {},
   selectedSessionKey: null,
   historySearch: '',
+  historyMonth: '',
   urlDraft: localStorage.getItem('apps_script_url') || '',
   newStudent: { name: '', gender: '', birthday: '' },
   editingStudent: null,
@@ -737,7 +738,18 @@ function renderHistory() {
 
 function tapHistoryStudent(name) {
   state.historySearch = state.historySearch === name ? '' : name;
+  state.historyMonth = '';
   render();
+}
+function selectHistoryMonth(m) {
+  state.historyMonth = m;
+  const results = document.getElementById('history-results');
+  if (results) results.innerHTML = renderHistoryResults();
+}
+function formatMonthLabel(m) {
+  if (!m) return '';
+  const [y, mo] = m.split('-');
+  return `${y}年${parseInt(mo,10)}月`;
 }
 
 function renderHistoryResults() {
@@ -745,29 +757,40 @@ function renderHistoryResults() {
   let sessions = getSessions();
   if (q) sessions = sessions.filter(s => s.student.includes(q));
 
-  // 如果搜尋文字剛好完全對到一位學生,上面顯示整體訓練量摘要 + 趨勢
+  // 如果搜尋文字剛好完全對到一位學生,上面顯示整體訓練量摘要 + 可選月份查看該月平均
   const exactStudent = state.roster.find(s => s.name === q);
   let summaryHtml = '';
   if (exactStudent) {
     const series = getStudentVolumeSeries(q);
     const total = series.reduce((s, x) => s + x.volume, 0);
-    const avg = series.length ? Math.round(total / series.length) : 0;
-    const max = Math.max(1, ...series.map(x => x.volume));
+    const months = Array.from(new Set(series.map(x => x.date.slice(0, 7)))).sort().reverse();
+    if (!state.historyMonth || !months.includes(state.historyMonth)) {
+      state.historyMonth = months[0] || '';
+    }
+    const monthSeries = series.filter(x => x.date.slice(0, 7) === state.historyMonth);
+    const monthTotal = monthSeries.reduce((s, x) => s + x.volume, 0);
+    const monthAvg = monthSeries.length ? Math.round(monthTotal / monthSeries.length) : 0;
+    const max = Math.max(1, ...monthSeries.map(x => x.volume));
     summaryHtml = `
     <div class="card" style="margin-bottom:12px;">
       <h3 class="card-title">${esc(q)} 的整體訓練量</h3>
       <p style="font-size:13px;color:#6E8C89;margin:-4px 0 14px;">訓練容量 = 組數 × 次數 × 重量,只計算有填重量的動作</p>
-      <div style="display:flex;gap:32px;margin-bottom:${series.length ? '16px' : '0'};">
-        <div>
-          <div class="font-display mono" style="font-size:24px;font-weight:700;color:#233330;">${total.toLocaleString()}</div>
-          <div style="font-size:13px;color:#6E8C89;margin-top:2px;">總訓練容量(kg)</div>
-        </div>
-        <div>
-          <div class="font-display mono" style="font-size:24px;font-weight:700;color:#233330;">${avg.toLocaleString()}</div>
-          <div style="font-size:13px;color:#6E8C89;margin-top:2px;">平均每堂(kg)</div>
-        </div>
+      <div>
+        <div class="font-display mono" style="font-size:24px;font-weight:700;color:#233330;">${total.toLocaleString()}</div>
+        <div style="font-size:13px;color:#6E8C89;margin-top:2px;">總訓練容量(kg)</div>
       </div>
-      ${series.length ? series.map(x => `
+      ${months.length === 0 ? `<p class="empty-state">還沒有可計算的訓練容量,記錄動作時記得填重量喔</p>` : `
+      <div class="field" style="margin-top:16px;">
+        <div class="field-label">選擇月份</div>
+        <div class="chip-row">${months.map(m => `
+          <button onclick="selectHistoryMonth('${m}')" class="chip-sm" style="${state.historyMonth===m ? 'background:#159C93;color:#fff;' : ''}">${formatMonthLabel(m)}</button>
+        `).join('')}</div>
+      </div>
+      <div style="margin-top:14px;margin-bottom:${monthSeries.length ? '14px' : '0'};">
+        <div class="font-display mono" style="font-size:22px;font-weight:700;color:#233330;">${monthAvg.toLocaleString()}</div>
+        <div style="font-size:13px;color:#6E8C89;margin-top:2px;">${formatMonthLabel(state.historyMonth)} 平均每堂(kg)</div>
+      </div>
+      ${monthSeries.map(x => `
         <div style="margin-bottom:10px;">
           <div style="display:flex;justify-content:space-between;font-size:13px;color:#6E8C89;margin-bottom:3px;">
             <span>${fmtDate(x.date)}</span><span class="mono">${x.volume.toLocaleString()} kg</span>
@@ -776,7 +799,8 @@ function renderHistoryResults() {
             <div style="background:#159C93;height:100%;width:${Math.max(4, x.volume / max * 100)}%;border-radius:6px;"></div>
           </div>
         </div>
-      `).join('') : ''}
+      `).join('')}
+      `}
     </div>`;
   }
 
