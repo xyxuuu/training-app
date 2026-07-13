@@ -1032,16 +1032,6 @@ function renderSettings() {
         <div class="field-label">生日（選填）</div>
         ${birthdayPicker('new-student-birthday', state.newStudent.birthday)}
       </div>
-      <div class="row2 field">
-        <div>
-          <div class="field-label">總堂數（選填）</div>
-          <input id="new-student-total" type="number" inputmode="numeric" value="${esc(state.newStudent.totalSessions)}" placeholder="例如 24" />
-        </div>
-        <div>
-          <div class="field-label">舊系統已上（選填）</div>
-          <input id="new-student-baseused" type="number" inputmode="numeric" value="${esc(state.newStudent.baseUsed)}" placeholder="轉過來前上過幾堂" />
-        </div>
-      </div>
       <button onclick="addStudent()" class="btn-primary" style="margin-bottom:${state.roster.length?'16px':'0'};">${ic('plus',18)}新增學生</button>
 
       ${state.roster.map(s => {
@@ -1064,16 +1054,6 @@ function renderSettings() {
             <div class="field">
               <div class="field-label">生日（選填）</div>
               ${birthdayPicker('student-edit-birthday', state.studentEditDraft.birthday)}
-            </div>
-            <div class="row2 field">
-              <div>
-                <div class="field-label">總堂數（選填）</div>
-                <input id="student-edit-total" type="number" inputmode="numeric" value="${esc(state.studentEditDraft.totalSessions)}" placeholder="例如 24" />
-              </div>
-              <div>
-                <div class="field-label">舊系統已上（選填）</div>
-                <input id="student-edit-baseused" type="number" inputmode="numeric" value="${esc(state.studentEditDraft.baseUsed)}" placeholder="轉過來前上過幾堂" />
-              </div>
             </div>
             <div class="btn-row" style="justify-content:flex-end;">
               <button onclick="cancelEditStudent()" class="btn-text">取消</button>
@@ -1149,12 +1129,8 @@ function render() {
   bindLiveInput('ex-notes', 'exerciseForm.notes');
   bindLiveInput('new-student-name', 'newStudent.name');
   bindLiveInput('new-student-gender', 'newStudent.gender');
-  bindLiveInput('new-student-total', 'newStudent.totalSessions');
-  bindLiveInput('new-student-baseused', 'newStudent.baseUsed');
   bindLiveInput('student-edit-name', 'studentEditDraft.name');
   bindLiveInput('student-edit-gender', 'studentEditDraft.gender');
-  bindLiveInput('student-edit-total', 'studentEditDraft.totalSessions');
-  bindLiveInput('student-edit-baseused', 'studentEditDraft.baseUsed');
   bindLiveInput('edit-exercise', 'editDraft.exercise');
   bindLiveInput('edit-sets', 'editDraft.sets');
   bindLiveInput('edit-reps', 'editDraft.reps');
