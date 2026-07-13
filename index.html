@@ -12,20 +12,20 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
 <link rel="icon" href="icon-192.png" />
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700;800&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+  @import url('https://font.emtech.cc/css/GenSenRoundedTW');
 
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
   body {
     background: #EFFBFA;
     color: #233330;
-    font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: 'GenSenRoundedTW', -apple-system, BlinkMacSystemFont, sans-serif;
     padding-bottom: 92px;
     -webkit-tap-highlight-color: transparent;
   }
   .page { max-width: 640px; margin: 0 auto; }
-  .font-display { font-family: 'Space Grotesk', sans-serif; }
-  .mono { font-family: 'IBM Plex Mono', monospace; }
+  .font-display { font-family: 'GenSenRoundedTW', sans-serif; }
+  .mono { font-family: 'GenSenRoundedTW', monospace; }
 
   /* ---- header ---- */
   .header {
@@ -102,13 +102,13 @@
   }
 
   .review-box { margin-top: 8px; }
-  .review-label { font-size: 12px; color: #A87A3B; font-weight: 600; margin-bottom: 4px; }
+  .review-label { font-size: 12px; color: #8A9490; font-weight: 600; margin-bottom: 4px; }
   .review-box textarea {
-    border: 1px solid #F0DDB0; background: #FFFBF3; border-radius: 8px; padding: 8px 10px;
+    border: 1px solid #E1E8E6; background: #FAFCFB; border-radius: 8px; padding: 8px 10px;
     font-size: 14px; min-height: 40px;
   }
-  .review-box textarea:focus { border-color: #C68A3E; box-shadow: 0 0 0 3px rgba(198,138,62,0.15); }
-  .review-box textarea::placeholder { color: #C9B48A; }
+  .review-box textarea:focus { border-color: #159C93; box-shadow: 0 0 0 3px rgba(21,156,147,0.15); }
+  .review-box textarea::placeholder { color: #B0BCB8; }
 
   .btn-primary {
     width: 100%; background: #159C93; color: #fff; border: none; border-radius: 10px;
@@ -130,7 +130,7 @@
   .exercise-card + .exercise-card { margin-top: 8px; }
   .exercise-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
   .exercise-name { font-weight: 700; font-size: 18px; color: #233330; }
-  .exercise-meta { font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: #6E8C89; margin-top: 4px; }
+  .exercise-meta { font-family: 'GenSenRoundedTW', monospace; font-size: 14px; color: #6E8C89; margin-top: 4px; }
   .exercise-note { font-size: 14px; color: #6E8C89; margin-top: 6px; line-height: 1.6; }
   .exercise-actions { display: flex; gap: 2px; flex-shrink: 0; }
   .icon-btn { background: none; border: none; color: #9BB5B2; padding: 7px; cursor: pointer; display:flex; }
@@ -148,11 +148,11 @@
   .history-item + .history-item { margin-top: 8px; }
   .history-name { font-weight: 700; font-size: 18px; color: #233330; }
   .history-sub { font-size: 14px; color: #6E8C89; margin-top: 2px; }
-  .history-time { font-family: 'IBM Plex Mono', monospace; font-size: 16px; color: #6E8C89; flex-shrink: 0; padding-left: 10px; }
+  .history-time { font-family: 'GenSenRoundedTW', monospace; font-size: 16px; color: #6E8C89; flex-shrink: 0; padding-left: 10px; }
 
-  .session-header { background: #E7F7F5; border: 1px solid #BFE6E1; border-radius: 16px; padding: 16px; margin-bottom: 16px; text-align: left; }
+  .session-header { background: #fff; border: 1px solid #DCEEEC; border-left: 4px solid #159C93; border-radius: 16px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(43,34,48,0.05); text-align: left; }
   .session-header-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-  .session-name { font-family: 'Space Grotesk', sans-serif; font-weight: 800; font-size: 21px; color: #233330; }
+  .session-name { font-family: 'GenSenRoundedTW', sans-serif; font-weight: 800; font-size: 21px; color: #233330; }
   .session-date { font-size: 14px; color: #6E8C89; margin-top: 4px; }
   .session-note { font-size: 14px; color: #56706D; margin-top: 10px; padding-top: 10px; border-top: 1px solid #DCEEEC; line-height: 1.6; }
 
@@ -177,7 +177,7 @@
 
   .empty-state { color: #9BB5B2; font-size: 16px; text-align: center; padding: 32px 0; }
 
-  .setup-title { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 20px; margin: 0 0 6px; text-align: left; }
+  .setup-title { font-family: 'GenSenRoundedTW', sans-serif; font-weight: 700; font-size: 20px; margin: 0 0 6px; text-align: left; }
   .setup-desc { font-size: 14px; color: #6E8C89; margin: 0 0 16px; line-height: 1.6; text-align: left; }
 
   .chips-list { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -885,7 +885,7 @@ function renderHistory() {
       <div class="session-header">
         <div class="session-header-top">
           <div class="session-name">${esc(s.student)}</div>
-          ${s.purpose ? `<span class="tag-purpose" style="background:#fff;">${esc(s.purpose)}</span>` : ''}
+          ${s.purpose ? `<span class="tag-purpose">${esc(s.purpose)}</span>` : ''}
         </div>
         <div class="session-date">${fmtDate(s.date)}${vol > 0 ? ` · 訓練容量 <span class="mono" style="color:#159C93;font-weight:600;">${vol.toLocaleString()} kg</span>` : ''}</div>
         ${s.sessionNote ? `<div class="session-note">本堂備註:${esc(s.sessionNote)}</div>` : ''}
