@@ -131,6 +131,9 @@
   /* ---- exercise cards ---- */
   .exercise-card { border: 1px solid #DCEEEC; background: #fff; border-radius: 12px; padding: 14px; text-align: left; }
   .exercise-card + .exercise-card { margin-top: 8px; }
+  .exercise-card.dragging { opacity: 0.55; box-shadow: 0 6px 18px rgba(43,34,48,0.18); }
+  .drag-handle { cursor: grab; padding: 6px; color: #B5AC9C; touch-action: none; flex-shrink: 0; display: flex; align-items: center; }
+  .drag-handle:active { cursor: grabbing; }
   .exercise-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
   .exercise-name { font-weight: 700; font-size: 18px; color: #233330; }
   .exercise-meta { font-family: 'GenSenRoundedTW', monospace; font-size: 14px; color: #6E8C89; margin-top: 4px; }
@@ -228,6 +231,7 @@ const ICON_PATHS = {
   chevronLeft: '<path d="M15 18l-6-6 6-6"/>',
   chevronUp: '<path d="M18 15l-6-6-6 6"/>',
   chevronDown: '<path d="M6 9l6 6 6-6"/>',
+  grip: '<circle cx="9" cy="6" r="1.4"/><circle cx="15" cy="6" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="18" r="1.4"/><circle cx="15" cy="18" r="1.4"/>',
   calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
   users: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>',
   settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
@@ -580,21 +584,14 @@ function getCurrentSessionExercises() {
 }
 
 // 把某個動作往上或往下移一位,並把整堂的順序重新編號存回 Google Sheets
-async function moveExercise(id, direction) {
-  const row = state.rows.find(r => r.ID === id);
-  if (!row) return;
-  const list = getOrderedSessionExercises(row['學生姓名'], row['日期']);
-  const idx = list.findIndex(r => r.ID === id);
-  const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
-  if (idx === -1 || swapIdx < 0 || swapIdx >= list.length) return;
-  const tmp = list[idx];
-  list[idx] = list[swapIdx];
-  list[swapIdx] = tmp;
-  const updates = list.map((r, i) => ({ id: r.ID, order: i + 1 }));
+// 拖曳排序:放開時把整堂的最新順序重新編號存回 Google Sheets
+async function persistDragOrder(list) {
+  const ids = Array.from(list.querySelectorAll('.exercise-card')).map(el => el.dataset.id);
+  if (ids.length === 0) return;
+  const updates = ids.map((id, i) => ({ id, order: i + 1 }));
   updates.forEach(u => {
     state.rows = state.rows.map(r => r.ID === u.id ? { ...r, '順序': u.order } : r);
   });
-  render();
   try {
     for (const u of updates) {
       await fetch(state.sheetUrl, {
@@ -603,9 +600,55 @@ async function moveExercise(id, direction) {
         body: JSON.stringify({ action: 'update', id: u.id, order: u.order }),
       });
     }
+    showToast('順序已儲存');
   } catch (e) {
     showToast('順序同步失敗，重新整理看看');
   }
+}
+
+function getDragAfterElement(list, y) {
+  const cards = [...list.querySelectorAll('.exercise-card:not(.dragging)')];
+  return cards.reduce((closest, child) => {
+    const box = child.getBoundingClientRect();
+    const offset = y - box.top - box.height / 2;
+    if (offset < 0 && offset > closest.offset) {
+      return { offset, element: child };
+    }
+    return closest;
+  }, { offset: -Infinity, element: null }).element;
+}
+
+function makeDraggable(handle) {
+  if (handle._dragBound) return;
+  handle._dragBound = true;
+  handle.addEventListener('pointerdown', function (e) {
+    const card = handle.closest('.exercise-card');
+    const list = handle.closest('.drag-list');
+    if (!card || !list) return;
+    e.preventDefault();
+    card.classList.add('dragging');
+
+    function onMove(ev) {
+      const after = getDragAfterElement(list, ev.clientY);
+      if (after == null) {
+        list.appendChild(card);
+      } else {
+        list.insertBefore(card, after);
+      }
+    }
+    function onUp() {
+      card.classList.remove('dragging');
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      persistDragOrder(list);
+    }
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+  });
+}
+
+function setupDragHandles() {
+  document.querySelectorAll('.drag-handle').forEach(makeDraggable);
 }
 
 // 整堂刪除:把某位學生某一天的所有動作紀錄一次刪光
@@ -707,7 +750,7 @@ async function submitExercise() {
         重量: payload.weight, 秒數: payload.duration, 備注: payload.notes, 課後檢討: '',
         建立時間: new Date().toISOString(),
       });
-      state.exerciseForm = { name: '', sets: '', reps: '', weight: '', duration: '', notes: '' };
+      state.exerciseForm = { name: state.exerciseForm.name, sets: '', reps: '', weight: '', duration: '', notes: '' };
       showToast('已記錄');
     } else {
       showToast('儲存失敗：' + data.message);
@@ -759,6 +802,11 @@ async function saveEdit(id) {
   }
 }
 // 課後檢討:欄位失焦就直接存檔,不用像其他欄位一樣先點編輯才能改
+function clearExerciseName() {
+  state.exerciseForm.name = '';
+  render();
+}
+
 function reuseExercise(r) {
   state.exerciseForm = {
     name: r['動作名稱'] || '', sets: r['組數'] || '', reps: r['次數'] || '',
@@ -849,11 +897,9 @@ function exerciseMetaLine(r) {
 function exerciseRowHtml(r, idx, arr) {
   const isEditing = state.editingId === r.ID;
   const busy = state.savingId === r.ID;
-  const isFirst = idx === 0;
-  const isLast = arr && idx === arr.length - 1;
   if (isEditing) {
     return `
-    <div class="edit-card">
+    <div class="edit-card" data-id="${r.ID}">
       <div class="field"><input id="edit-exercise" type="text" value="${esc(state.editDraft.exercise)}" placeholder="動作名稱" /></div>
       <div class="row2 field">
         <input id="edit-sets" type="number" inputmode="numeric" value="${esc(state.editDraft.sets)}" placeholder="組數（選填）" />
@@ -873,12 +919,9 @@ function exerciseRowHtml(r, idx, arr) {
     </div>`;
   }
   return `
-  <div class="exercise-card">
+  <div class="exercise-card" data-id="${r.ID}">
     <div class="exercise-top">
-      <div style="display:flex;flex-direction:column;gap:2px;flex-shrink:0;">
-        <button onclick="moveExercise('${r.ID}','up')" ${isFirst?'disabled':''} class="icon-btn" style="padding:2px;${isFirst?'opacity:0.25;':''}">${ic('chevronUp',16)}</button>
-        <button onclick="moveExercise('${r.ID}','down')" ${isLast?'disabled':''} class="icon-btn" style="padding:2px;${isLast?'opacity:0.25;':''}">${ic('chevronDown',16)}</button>
-      </div>
+      <div class="drag-handle">${ic('grip',18)}</div>
       <div style="flex:1;min-width:0;">
         <div class="exercise-name">${esc(r['動作名稱'])}</div>
         ${exerciseMetaLine(r)}
@@ -946,10 +989,16 @@ function renderLog() {
     <div class="card">
       <h3 class="card-title">新增動作</h3>
       <div class="field">
-        <input id="ex-name" type="text" value="${esc(state.exerciseForm.name)}" placeholder="動作名稱，例如：深蹲" list="exercise-suggestions" />
-        <datalist id="exercise-suggestions">
-          ${getStudentExerciseNames(state.session.student).map(n => `<option value="${esc(n)}"></option>`).join('')}
-        </datalist>
+        <div style="display:flex;gap:8px;align-items:flex-start;">
+          <div style="flex:1;">
+            <input id="ex-name" type="text" value="${esc(state.exerciseForm.name)}" placeholder="動作名稱，例如：深蹲" list="exercise-suggestions" />
+            <datalist id="exercise-suggestions">
+              ${getStudentExerciseNames(state.session.student).map(n => `<option value="${esc(n)}"></option>`).join('')}
+            </datalist>
+          </div>
+          ${state.exerciseForm.name ? `<button onclick="clearExerciseName()" class="btn-secondary" style="padding:11px;flex-shrink:0;" title="清空動作名稱">${ic('x',16)}</button>` : ''}
+        </div>
+        <p style="font-size:12px;color:#9BB5B2;margin:6px 0 0;">存檔後動作名稱會保留，方便連續記同一個動作不同重量；要換動作就點右邊 × 清空</p>
       </div>
       <div class="row2 field">
         <input id="ex-sets" type="number" inputmode="numeric" value="${esc(state.exerciseForm.sets)}" placeholder="組數（選填）" />
@@ -972,8 +1021,8 @@ function renderLog() {
         ${state.loadingRows ? ic('loader',14,true) : ''}
       </h3>
       ${exercises.length === 0
-        ? `<p class="empty-state">還沒有動作,新增第一個吧</p>`
-        : exercises.map(exerciseRowHtml).join('')}
+        ? `<p class="empty-state">還沒有動作，新增第一個吧</p>`
+        : `<div class="drag-list">${exercises.map(exerciseRowHtml).join('')}</div>`}
     </div>` : ''}
   </div>`;
 }
@@ -994,7 +1043,7 @@ function renderHistory() {
         <div class="session-date">${fmtDate(s.date)}${vol > 0 ? ` · 訓練容量 <span class="mono" style="color:#159C93;font-weight:600;">${vol.toLocaleString()} kg</span>` : ''}</div>
         ${s.sessionNote ? `<div class="session-note">本堂備註：${esc(s.sessionNote)}</div>` : ''}
       </div>
-      ${s.exercises.map(exerciseRowHtml).join('')}
+      <div class="drag-list">${s.exercises.map(exerciseRowHtml).join('')}</div>
       <button onclick="jumpToSession('${s.key.replace(/'/g,"&#39;")}')" class="btn-primary" style="margin-top:12px;">
         ${ic('plus',18)}在這堂繼續新增動作
       </button>
@@ -1089,7 +1138,7 @@ function renderHistoryResults() {
     : sessions.map(s => {
         const vol = getSessionVolume(s.exercises);
         return `
-      <button onclick="selectSession('${s.key.replace(/'/g,"&#39;")}')" class="history-item">
+      <div onclick="selectSession('${s.key.replace(/'/g,"&#39;")}')" class="history-item">
         <div style="flex:1;min-width:0;">
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
             <span class="history-name">${esc(s.student)}</span>
@@ -1101,7 +1150,8 @@ function renderHistoryResults() {
           ${vol > 0 ? `<div class="mono" style="font-weight:700;color:#159C93;font-size:15px;">${vol.toLocaleString()}kg</div>` : ''}
           <div class="history-time mono" style="margin-top:2px;">${fmtTime(s.latest)}</div>
         </div>
-      </button>
+        <button onclick="event.stopPropagation(); deleteSession('${s.student.replace(/'/g,"&#39;")}', '${s.date}')" class="icon-btn" style="color:#B23A2E;flex-shrink:0;">${ic('trash',16)}</button>
+      </div>
     `;
       }).join('');
 
@@ -1243,6 +1293,7 @@ function render() {
   bindLiveInput('edit-duration', 'editDraft.duration');
   bindLiveInput('edit-notes', 'editDraft.notes');
   bindHistorySearch();
+  setupDragHandles();
 }
 
 // 歷史紀錄搜尋框:即時篩選但只更新結果區塊,不整頁重繪,避免打字打到一半失焦
