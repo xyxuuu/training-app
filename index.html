@@ -252,8 +252,20 @@ function loadRoster() {
   try { raw = JSON.parse(localStorage.getItem('roster') || '[]'); } catch (e) {}
   return raw.map(item => typeof item === 'string' ? { name: item, gender: '', birthday: '' } : item);
 }
-function saveRoster() {
+async function saveRoster() {
   localStorage.setItem('roster', JSON.stringify(state.roster));
+  if (!state.sheetUrl) return;
+  try {
+    const res = await fetch(state.sheetUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'saveRoster', roster: state.roster }),
+    });
+    const data = await res.json();
+    if (data.status !== 'ok') showToast('學生名單同步到 Google Sheets 失敗');
+  } catch (e) {
+    showToast('學生名單同步失敗（連線問題），但已存在這台裝置上');
+  }
 }
 
 const state = {
@@ -299,7 +311,7 @@ function fmtDate(dateStr) {
   const d = new Date(dateStr + 'T00:00:00');
   if (isNaN(d)) return dateStr;
   const wd = ['日','一','二','三','四','五','六'][d.getDay()];
-  return `${d.getMonth()+1}/${d.getDate()} (${wd})`;
+  return `${d.getMonth()+1}/${d.getDate()}（${wd}）`;
 }
 function fmtTime(ts) {
   if (!ts) return '';
@@ -336,6 +348,15 @@ async function fetchRows() {
     const data = await res.json();
     if (data.status === 'ok') {
       state.rows = (data.data || []).map(r => ({ ...r, '日期': normalizeDateStr(r['日期']) }));
+      if (Array.isArray(data.roster)) {
+        if (data.roster.length === 0 && state.roster.length > 0) {
+          // Sheets 那邊的學生目錄還是空的,但本機有舊資料,自動同步上去一次(相容舊版沒有 Sheets 同步前存的名單)
+          saveRoster();
+        } else {
+          state.roster = data.roster;
+          localStorage.setItem('roster', JSON.stringify(state.roster));
+        }
+      }
     } else {
       state.fetchError = data.message || '讀取失敗';
     }
@@ -818,7 +839,7 @@ function renderLog() {
       <div class="field">
         <div class="field-label">${ic('users',14)} 學生</div>
         ${state.roster.length === 0
-          ? `<p style="color:#C0392B;font-size:14px;margin:0;">尚未新增學生,請到「設定」加入學生名單</p>`
+          ? `<p style="color:#C0392B;font-size:14px;margin:0;">尚未新增學生，請到「設定」加入學生名單</p>`
           : `<div class="chip-row">${state.roster.map(s => {
               const pkg = getSessionPackageInfo(s);
               const warn = pkg && pkg.remaining <= 3;
@@ -1018,7 +1039,8 @@ function renderSettings() {
       </div>
     </div>
     <div class="card">
-      <h3 class="card-title">學生目錄(${state.roster.length})</h3>
+      <h3 class="card-title">學生目錄（${state.roster.length}）</h3>
+      <p style="font-size:13px;color:#6E8C89;margin:-8px 0 12px;">學生名單已同步到 Google Sheets，換裝置或換瀏覽器打開一樣看得到</p>
       <div class="field"><input id="new-student-name" type="text" value="${esc(state.newStudent.name)}" placeholder="姓名" /></div>
       <div class="field">
         <select id="new-student-gender">
