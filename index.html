@@ -22,7 +22,10 @@
     font-family: 'GenSenRoundedTW', -apple-system, BlinkMacSystemFont, sans-serif;
     padding-bottom: 92px;
     -webkit-tap-highlight-color: transparent;
+    line-height: 1.6;
   }
+  h1, h2, h3, .exercise-name, .history-name, .session-name, .setup-title { line-height: 1.35; }
+  .chip, .chip-sm, .tag-purpose, button { line-height: 1.4; }
   .page { max-width: 640px; margin: 0 auto; }
   .font-display { font-family: 'GenSenRoundedTW', sans-serif; }
   .mono { font-family: 'GenSenRoundedTW', monospace; }
@@ -337,7 +340,7 @@ async function fetchRows() {
       state.fetchError = data.message || '讀取失敗';
     }
   } catch (e) {
-    state.fetchError = '無法連上 Google Sheets,請確認設定裡的網址跟部署權限(誰可以存取需選「所有人」)';
+    state.fetchError = '無法連上 Google Sheets，請確認設定裡的網址跟部署權限（誰可以存取需選「所有人」）';
   } finally {
     state.loadingRows = false;
     render();
@@ -368,7 +371,7 @@ function addStudent() {
   render();
 }
 function removeStudent(name) {
-  const ok = confirm(`確定要把「${name}」從學生目錄移除嗎?\n\n(他過去的訓練紀錄不會被刪除,只是這裡的快速選單不會再顯示他,之後要用可以再加回來)`);
+  const ok = confirm(`確定要把「${name}」從學生目錄移除嗎？\n\n（他過去的訓練紀錄不會被刪除，只是這裡的快速選單不會再顯示他，之後要用可以再加回來）`);
   if (!ok) return;
   state.roster = state.roster.filter(s => s.name !== name);
   saveRoster();
@@ -384,7 +387,7 @@ async function saveEditStudent(originalName) {
   const newName = state.studentEditDraft.name.trim();
   if (!newName) { showToast('姓名不能空白'); return; }
   if (newName !== originalName && state.roster.some(s => s.name === newName)) {
-    showToast('已經有學生叫這個名字了,請先處理重複的名字');
+    showToast('已經有學生叫這個名字了，請先處理重複的名字');
     return;
   }
   const nameChanged = newName !== originalName;
@@ -411,10 +414,10 @@ async function saveEditStudent(originalName) {
         render();
         if (data.updated > 0) showToast(`已同步更新 ${data.updated} 筆歷史紀錄的姓名`);
       } else {
-        showToast('姓名已改,但歷史紀錄同步失敗,請確認 Apps Script 是否為最新版');
+        showToast('姓名已改，但歷史紀錄同步失敗，請確認 Apps Script 是否為最新版');
       }
     } catch (e) {
-      showToast('姓名已改,但歷史紀錄同步失敗(連線問題)');
+      showToast('姓名已改，但歷史紀錄同步失敗（連線問題）');
     }
   }
 }
@@ -612,10 +615,10 @@ async function submitExercise() {
       state.exerciseForm = { name: '', sets: '', reps: '', weight: '', duration: '', notes: '' };
       showToast('已記錄');
     } else {
-      showToast('儲存失敗:' + data.message);
+      showToast('儲存失敗：' + data.message);
     }
   } catch (e) {
-    showToast('連線失敗,請檢查網路或設定');
+    showToast('連線失敗，請檢查網路或設定');
   } finally {
     state.savingId = null;
     render();
@@ -667,7 +670,7 @@ function reuseExercise(r) {
     weight: r['重量'] || '', duration: r['秒數'] || '', notes: '',
   };
   render();
-  showToast('已帶入上一筆內容,改個數字存就好');
+  showToast('已帶入上一筆內容，改個數字存就好');
 }
 
 async function saveReviewNote(id, value) {
@@ -687,12 +690,12 @@ async function saveReviewNote(id, value) {
       showToast('儲存失敗');
     }
   } catch (e) {
-    showToast('連線失敗,課後檢討沒有存到');
+    showToast('連線失敗，課後檢討沒有存到');
   }
 }
 
 async function deleteExercise(id) {
-  if (!confirm('確定要刪除這筆動作紀錄嗎?這會直接從 Google Sheets 永久刪除,無法復原。')) return;
+  if (!confirm('確定要刪除這筆動作紀錄嗎？這會直接從 Google Sheets 永久刪除，無法復原。')) return;
   state.savingId = id;
   render();
   try {
@@ -756,12 +759,12 @@ function exerciseRowHtml(r) {
     <div class="edit-card">
       <div class="field"><input id="edit-exercise" type="text" value="${esc(state.editDraft.exercise)}" placeholder="動作名稱" /></div>
       <div class="row2 field">
-        <input id="edit-sets" type="number" inputmode="numeric" value="${esc(state.editDraft.sets)}" placeholder="組數(選填)" />
-        <input id="edit-reps" type="number" inputmode="numeric" value="${esc(state.editDraft.reps)}" placeholder="次數(選填)" />
+        <input id="edit-sets" type="number" inputmode="numeric" value="${esc(state.editDraft.sets)}" placeholder="組數（選填）" />
+        <input id="edit-reps" type="number" inputmode="numeric" value="${esc(state.editDraft.reps)}" placeholder="次數（選填）" />
       </div>
       <div class="row2 field">
-        <input id="edit-weight" type="number" inputmode="decimal" value="${esc(state.editDraft.weight)}" placeholder="重量 kg(選填)" />
-        <input id="edit-duration" type="number" inputmode="numeric" value="${esc(state.editDraft.duration)}" placeholder="秒數(選填)" />
+        <input id="edit-weight" type="number" inputmode="decimal" value="${esc(state.editDraft.weight)}" placeholder="重量 kg（選填）" />
+        <input id="edit-duration" type="number" inputmode="numeric" value="${esc(state.editDraft.duration)}" placeholder="秒數（選填）" />
       </div>
       <div class="field"><textarea id="edit-notes" rows="2" placeholder="備注">${esc(state.editDraft.notes)}</textarea></div>
       <div class="btn-row" style="justify-content:flex-end">
@@ -778,7 +781,7 @@ function exerciseRowHtml(r) {
       <div style="flex:1;min-width:0;">
         <div class="exercise-name">${esc(r['動作名稱'])}</div>
         ${exerciseMetaLine(r)}
-        ${r['備注'] ? `<div class="exercise-note">備注:${esc(r['備注'])}</div>` : ''}
+        ${r['備注'] ? `<div class="exercise-note">備注：${esc(r['備注'])}</div>` : ''}
       </div>
       <div class="exercise-actions">
         <button onclick='reuseExercise(${JSON.stringify(r).replace(/'/g,"&#39;")})' class="icon-btn" title="重用這筆內容">${ic('copy',16)}</button>
@@ -788,7 +791,7 @@ function exerciseRowHtml(r) {
     </div>
     <div class="review-box">
       <div class="review-label">課後檢討</div>
-      <textarea rows="2" placeholder="上完課後可以填的檢討,例如姿勢、下次要注意的地方..." onblur="saveReviewNote('${r.ID}', this.value)">${esc(r['課後檢討'])}</textarea>
+      <textarea rows="2" placeholder="上完課後可以填的檢討，例如姿勢、下次要注意的地方..." onblur="saveReviewNote('${r.ID}', this.value)">${esc(r['課後檢討'])}</textarea>
     </div>
   </div>`;
 }
@@ -798,7 +801,7 @@ function renderSetup() {
   <div class="content">
     <div class="card">
       <h2 class="setup-title">先連接你的 Google Sheets</h2>
-      <p class="setup-desc">貼上 Apps Script 部署後拿到的網址(格式類似 https://script.google.com/macros/s/xxxx/exec)</p>
+      <p class="setup-desc">貼上 Apps Script 部署後拿到的網址（格式類似 https://script.google.com/macros/s/xxxx/exec）</p>
       <div class="field"><input id="setup-url" type="text" value="${esc(state.urlDraft)}" placeholder="https://script.google.com/macros/s/.../exec" /></div>
       <button onclick="saveUrl()" class="btn-primary">儲存並開始使用</button>
     </div>
@@ -830,32 +833,32 @@ function renderLog() {
       </div>
       <div class="field">
         <div class="field-label">訓練目的</div>
-        <input id="purpose-input" type="text" value="${esc(state.session.purpose)}" placeholder="例如:增肌、減脂..." style="margin-bottom:8px;" />
+        <input id="purpose-input" type="text" value="${esc(state.session.purpose)}" placeholder="例如：增肌、減脂..." style="margin-bottom:8px;" />
         <div class="chip-row">${PURPOSE_CHIPS.map(p => `<button onclick="selectPurpose('${p}')" class="chip-sm">${p}</button>`).join('')}</div>
       </div>
       <div class="field">
-        <div class="field-label">本堂備註 <span class="field-hint">(整堂課的總結,下課後填就好)</span></div>
-        <textarea id="session-note-input" rows="2" placeholder="例如:今天出席狀況、下堂課要注意的地方...">${esc(state.session.sessionNote)}</textarea>
+        <div class="field-label">本堂備註 <span class="field-hint">（整堂課的總結，下課後填就好）</span></div>
+        <textarea id="session-note-input" rows="2" placeholder="例如：今天出席狀況、下堂課要注意的地方...">${esc(state.session.sessionNote)}</textarea>
       </div>
     </div>
 
     <div class="card">
       <h3 class="card-title">新增動作</h3>
       <div class="field">
-        <input id="ex-name" type="text" value="${esc(state.exerciseForm.name)}" placeholder="動作名稱,例如:深蹲" list="exercise-suggestions" />
+        <input id="ex-name" type="text" value="${esc(state.exerciseForm.name)}" placeholder="動作名稱，例如：深蹲" list="exercise-suggestions" />
         <datalist id="exercise-suggestions">
           ${getStudentExerciseNames(state.session.student).map(n => `<option value="${esc(n)}"></option>`).join('')}
         </datalist>
       </div>
       <div class="row2 field">
-        <input id="ex-sets" type="number" inputmode="numeric" value="${esc(state.exerciseForm.sets)}" placeholder="組數(選填)" />
-        <input id="ex-reps" type="number" inputmode="numeric" value="${esc(state.exerciseForm.reps)}" placeholder="次數(選填)" />
+        <input id="ex-sets" type="number" inputmode="numeric" value="${esc(state.exerciseForm.sets)}" placeholder="組數（選填）" />
+        <input id="ex-reps" type="number" inputmode="numeric" value="${esc(state.exerciseForm.reps)}" placeholder="次數（選填）" />
       </div>
       <div class="row2 field">
-        <input id="ex-weight" type="number" inputmode="decimal" value="${esc(state.exerciseForm.weight)}" placeholder="重量 kg(選填)" />
-        <input id="ex-duration" type="number" inputmode="numeric" value="${esc(state.exerciseForm.duration)}" placeholder="秒數(選填)" />
+        <input id="ex-weight" type="number" inputmode="decimal" value="${esc(state.exerciseForm.weight)}" placeholder="重量 kg（選填）" />
+        <input id="ex-duration" type="number" inputmode="numeric" value="${esc(state.exerciseForm.duration)}" placeholder="秒數（選填）" />
       </div>
-      <div class="field"><textarea id="ex-notes" rows="2" placeholder="備注(這個動作當下的狀況、感受...)">${esc(state.exerciseForm.notes)}</textarea></div>
+      <div class="field"><textarea id="ex-notes" rows="2" placeholder="備注（這個動作當下的狀況、感受...）">${esc(state.exerciseForm.notes)}</textarea></div>
       <button onclick="submitExercise()" ${state.savingId==='new'?'disabled':''} class="btn-primary">
         ${ic(state.savingId==='new'?'loader':'plus', 18, state.savingId==='new')}記錄這個動作
       </button>
@@ -888,7 +891,7 @@ function renderHistory() {
           ${s.purpose ? `<span class="tag-purpose">${esc(s.purpose)}</span>` : ''}
         </div>
         <div class="session-date">${fmtDate(s.date)}${vol > 0 ? ` · 訓練容量 <span class="mono" style="color:#159C93;font-weight:600;">${vol.toLocaleString()} kg</span>` : ''}</div>
-        ${s.sessionNote ? `<div class="session-note">本堂備註:${esc(s.sessionNote)}</div>` : ''}
+        ${s.sessionNote ? `<div class="session-note">本堂備註：${esc(s.sessionNote)}</div>` : ''}
       </div>
       ${s.exercises.map(exerciseRowHtml).join('')}
       <button onclick="jumpToSession('${s.key.replace(/'/g,"&#39;")}')" class="btn-primary" style="margin-top:12px;">
@@ -1019,23 +1022,23 @@ function renderSettings() {
       <div class="field"><input id="new-student-name" type="text" value="${esc(state.newStudent.name)}" placeholder="姓名" /></div>
       <div class="field">
         <select id="new-student-gender">
-          <option value="" ${state.newStudent.gender===''?'selected':''}>性別(選填)</option>
+          <option value="" ${state.newStudent.gender===''?'selected':''}>性別（選填）</option>
           <option value="女" ${state.newStudent.gender==='女'?'selected':''}>女</option>
           <option value="男" ${state.newStudent.gender==='男'?'selected':''}>男</option>
           <option value="其他" ${state.newStudent.gender==='其他'?'selected':''}>其他</option>
         </select>
       </div>
       <div class="field">
-        <div class="field-label">生日(選填)</div>
+        <div class="field-label">生日（選填）</div>
         ${birthdayPicker('new-student-birthday', state.newStudent.birthday)}
       </div>
       <div class="row2 field">
         <div>
-          <div class="field-label">總堂數(選填)</div>
+          <div class="field-label">總堂數（選填）</div>
           <input id="new-student-total" type="number" inputmode="numeric" value="${esc(state.newStudent.totalSessions)}" placeholder="例如 24" />
         </div>
         <div>
-          <div class="field-label">舊系統已上(選填)</div>
+          <div class="field-label">舊系統已上（選填）</div>
           <input id="new-student-baseused" type="number" inputmode="numeric" value="${esc(state.newStudent.baseUsed)}" placeholder="轉過來前上過幾堂" />
         </div>
       </div>
@@ -1052,23 +1055,23 @@ function renderSettings() {
             <div class="field"><input id="student-edit-name" type="text" value="${esc(state.studentEditDraft.name)}" placeholder="姓名" /></div>
             <div class="field">
               <select id="student-edit-gender">
-                <option value="" ${state.studentEditDraft.gender===''?'selected':''}>性別(選填)</option>
+                <option value="" ${state.studentEditDraft.gender===''?'selected':''}>性別（選填）</option>
                 <option value="女" ${state.studentEditDraft.gender==='女'?'selected':''}>女</option>
                 <option value="男" ${state.studentEditDraft.gender==='男'?'selected':''}>男</option>
                 <option value="其他" ${state.studentEditDraft.gender==='其他'?'selected':''}>其他</option>
               </select>
             </div>
             <div class="field">
-              <div class="field-label">生日(選填)</div>
+              <div class="field-label">生日（選填）</div>
               ${birthdayPicker('student-edit-birthday', state.studentEditDraft.birthday)}
             </div>
             <div class="row2 field">
               <div>
-                <div class="field-label">總堂數(選填)</div>
+                <div class="field-label">總堂數（選填）</div>
                 <input id="student-edit-total" type="number" inputmode="numeric" value="${esc(state.studentEditDraft.totalSessions)}" placeholder="例如 24" />
               </div>
               <div>
-                <div class="field-label">舊系統已上(選填)</div>
+                <div class="field-label">舊系統已上（選填）</div>
                 <input id="student-edit-baseused" type="number" inputmode="numeric" value="${esc(state.studentEditDraft.baseUsed)}" placeholder="轉過來前上過幾堂" />
               </div>
             </div>
@@ -1085,7 +1088,7 @@ function renderSettings() {
             <div style="flex:1;min-width:0;">
               <div class="exercise-name">${esc(s.name)}</div>
               <div class="exercise-meta" style="font-family:inherit;">${[s.gender, age !== null ? age + ' 歲' : ''].filter(Boolean).join(' · ') || '尚未填寫性別/生日'}</div>
-              ${pkg ? `<div style="font-size:14px;margin-top:6px;${pkg.remaining <= 3 ? 'color:#B23A2E;font-weight:600;' : 'color:#56706D;'}">已上 ${pkg.used} / 總堂數 ${pkg.total} · 剩餘 ${pkg.remaining} 堂${pkg.remaining <= 3 ? '(快用完了,記得提醒續約)' : ''}</div>` : ''}
+              ${pkg ? `<div style="font-size:14px;margin-top:6px;${pkg.remaining <= 3 ? 'color:#B23A2E;font-weight:600;' : 'color:#56706D;'}">已上 ${pkg.used} / 總堂數 ${pkg.total} · 剩餘 ${pkg.remaining} 堂${pkg.remaining <= 3 ? '（快用完了，記得提醒續約）' : ''}</div>` : ''}
             </div>
             <div class="exercise-actions">
               <button onclick='startEditStudent(${JSON.stringify(s).replace(/'/g,"&#39;")})' class="icon-btn">${ic('pencil',16)}</button>
