@@ -226,6 +226,8 @@ const ICON_PATHS = {
   x: '<path d="M18 6 6 18M6 6l12 12"/>',
   check: '<path d="M20 6 9 17l-5-5"/>',
   chevronLeft: '<path d="M15 18l-6-6 6-6"/>',
+  chevronUp: '<path d="M18 15l-6-6-6 6"/>',
+  chevronDown: '<path d="M6 9l6 6 6-6"/>',
   calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
   users: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>',
   settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
@@ -539,6 +541,17 @@ function getStudentExerciseNames(student) {
 }
 function onDateChange(v) { state.session.date = v; render(); }
 
+// 動作排序:優先用手動調整過的「順序」欄位,沒有的話用建立時間當備援
+function sortExercises(list) {
+  return list.slice().sort((a, b) => {
+    const oa = parseFloat(a['順序']), ob = parseFloat(b['順序']);
+    if (!isNaN(oa) && !isNaN(ob) && oa !== ob) return oa - ob;
+    if (!isNaN(oa) && isNaN(ob)) return -1;
+    if (isNaN(oa) && !isNaN(ob)) return 1;
+    return new Date(a['建立時間']) - new Date(b['建立時間']);
+  });
+}
+
 function getSessions() {
   const map = new Map();
   for (const r of state.rows) {
@@ -552,15 +565,73 @@ function getSessions() {
     if (r['訓練目的']) s.purpose = r['訓練目的'];
     if (r['本堂備註']) s.sessionNote = r['本堂備註'];
   }
-  return Array.from(map.values()).sort((a,b) => new Date(b.latest) - new Date(a.latest));
+  const sessions = Array.from(map.values());
+  sessions.forEach(s => { s.exercises = sortExercises(s.exercises); });
+  return sessions.sort((a,b) => new Date(b.latest) - new Date(a.latest));
+}
+
+function getOrderedSessionExercises(student, date) {
+  return sortExercises(state.rows.filter(r => r['學生姓名'] === student && r['日期'] === date));
 }
 
 function getCurrentSessionExercises() {
   if (!state.session.student || !state.session.date) return [];
-  return state.rows
-    .filter(r => r['學生姓名'] === state.session.student && r['日期'] === state.session.date)
-    .sort((a,b) => new Date(a['建立時間']) - new Date(b['建立時間']));
+  return getOrderedSessionExercises(state.session.student, state.session.date);
 }
+
+// 把某個動作往上或往下移一位,並把整堂的順序重新編號存回 Google Sheets
+async function moveExercise(id, direction) {
+  const row = state.rows.find(r => r.ID === id);
+  if (!row) return;
+  const list = getOrderedSessionExercises(row['學生姓名'], row['日期']);
+  const idx = list.findIndex(r => r.ID === id);
+  const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+  if (idx === -1 || swapIdx < 0 || swapIdx >= list.length) return;
+  const tmp = list[idx];
+  list[idx] = list[swapIdx];
+  list[swapIdx] = tmp;
+  const updates = list.map((r, i) => ({ id: r.ID, order: i + 1 }));
+  updates.forEach(u => {
+    state.rows = state.rows.map(r => r.ID === u.id ? { ...r, '順序': u.order } : r);
+  });
+  render();
+  try {
+    for (const u of updates) {
+      await fetch(state.sheetUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'update', id: u.id, order: u.order }),
+      });
+    }
+  } catch (e) {
+    showToast('順序同步失敗，重新整理看看');
+  }
+}
+
+// 整堂刪除:把某位學生某一天的所有動作紀錄一次刪光
+async function deleteSession(student, date) {
+  const ok = confirm(`確定要刪除「${student}」${fmtDate(date)}這一整堂的所有動作紀錄嗎？\n\n這會直接從 Google Sheets 永久刪除，無法復原。`);
+  if (!ok) return;
+  try {
+    const res = await fetch(state.sheetUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'deleteSession', studentName: student, date }),
+    });
+    const data = await res.json();
+    if (data.status === 'ok') {
+      state.rows = state.rows.filter(r => !(r['學生姓名'] === student && r['日期'] === date));
+      state.selectedSessionKey = null;
+      showToast(`已刪除整堂紀錄（${data.deleted} 個動作）`);
+      render();
+    } else {
+      showToast('刪除失敗');
+    }
+  } catch (e) {
+    showToast('連線失敗');
+  }
+}
+
 
 // 訓練容量 = 組數 × 次數 × 重量,依日期加總,只計算有填重量的動作
 function getStudentVolumeSeries(student) {
@@ -605,6 +676,8 @@ async function submitExercise() {
   }
   state.savingId = 'new';
   render();
+  const existingCount = getCurrentSessionExercises().length;
+  const nextOrder = existingCount + 1;
   const payload = {
     action: 'add',
     studentName: state.session.student,
@@ -612,6 +685,7 @@ async function submitExercise() {
     purpose: state.session.purpose,
     sessionNote: state.session.sessionNote,
     exercise: state.exerciseForm.name.trim(),
+    order: nextOrder,
     sets: state.exerciseForm.sets,
     reps: state.exerciseForm.reps,
     weight: state.exerciseForm.weight,
@@ -629,7 +703,7 @@ async function submitExercise() {
       state.rows.push({
         ID: data.id, 學生姓名: state.session.student, 日期: state.session.date,
         訓練目的: state.session.purpose, 本堂備註: state.session.sessionNote,
-        動作名稱: payload.exercise, 組數: payload.sets, 次數: payload.reps,
+        動作名稱: payload.exercise, 順序: nextOrder, 組數: payload.sets, 次數: payload.reps,
         重量: payload.weight, 秒數: payload.duration, 備注: payload.notes, 課後檢討: '',
         建立時間: new Date().toISOString(),
       });
@@ -772,9 +846,11 @@ function exerciseMetaLine(r) {
   return `<div class="exercise-meta">${parts.join(' · ')}</div>`;
 }
 
-function exerciseRowHtml(r) {
+function exerciseRowHtml(r, idx, arr) {
   const isEditing = state.editingId === r.ID;
   const busy = state.savingId === r.ID;
+  const isFirst = idx === 0;
+  const isLast = arr && idx === arr.length - 1;
   if (isEditing) {
     return `
     <div class="edit-card">
@@ -799,6 +875,10 @@ function exerciseRowHtml(r) {
   return `
   <div class="exercise-card">
     <div class="exercise-top">
+      <div style="display:flex;flex-direction:column;gap:2px;flex-shrink:0;">
+        <button onclick="moveExercise('${r.ID}','up')" ${isFirst?'disabled':''} class="icon-btn" style="padding:2px;${isFirst?'opacity:0.25;':''}">${ic('chevronUp',16)}</button>
+        <button onclick="moveExercise('${r.ID}','down')" ${isLast?'disabled':''} class="icon-btn" style="padding:2px;${isLast?'opacity:0.25;':''}">${ic('chevronDown',16)}</button>
+      </div>
       <div style="flex:1;min-width:0;">
         <div class="exercise-name">${esc(r['動作名稱'])}</div>
         ${exerciseMetaLine(r)}
@@ -917,6 +997,9 @@ function renderHistory() {
       ${s.exercises.map(exerciseRowHtml).join('')}
       <button onclick="jumpToSession('${s.key.replace(/'/g,"&#39;")}')" class="btn-primary" style="margin-top:12px;">
         ${ic('plus',18)}在這堂繼續新增動作
+      </button>
+      <button onclick="deleteSession('${s.student.replace(/'/g,"&#39;")}', '${s.date}')" class="btn-secondary" style="width:100%;justify-content:center;margin-top:10px;color:#B23A2E;border-color:#F3C9C4;">
+        ${ic('trash',16)}刪除整堂紀錄
       </button>
     </div>`;
   }
