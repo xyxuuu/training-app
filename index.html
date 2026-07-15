@@ -593,14 +593,17 @@ async function persistDragOrder(list) {
     state.rows = state.rows.map(r => r.ID === u.id ? { ...r, '順序': u.order } : r);
   });
   try {
-    for (const u of updates) {
-      await fetch(state.sheetUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: 'update', id: u.id, order: u.order }),
-      });
+    const res = await fetch(state.sheetUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'reorderExercises', updates }),
+    });
+    const data = await res.json();
+    if (data.status === 'ok') {
+      showToast('順序已儲存');
+    } else {
+      showToast('順序同步失敗，請確認 Apps Script 是否為最新版');
     }
-    showToast('順序已儲存');
   } catch (e) {
     showToast('順序同步失敗，重新整理看看');
   }
@@ -1103,21 +1106,21 @@ function renderHistoryResults() {
     summaryHtml = `
     <div class="card" style="margin-bottom:12px;">
       <h3 class="card-title">${esc(q)} 的整體訓練量</h3>
-      <p style="font-size:13px;color:#6E8C89;margin:-4px 0 14px;">訓練容量 = 組數 × 次數 × 重量,只計算有填重量的動作</p>
+      <p style="font-size:13px;color:#6E8C89;margin:-4px 0 14px;">訓練容量 = 組數 × 次數 × 重量，只計算有填重量的動作</p>
       <div>
         <div class="font-display mono" style="font-size:24px;font-weight:700;color:#233330;">${total.toLocaleString()}</div>
-        <div style="font-size:13px;color:#6E8C89;margin-top:2px;">總訓練容量(kg)</div>
+        <div style="font-size:13px;color:#6E8C89;margin-top:2px;">總訓練容量（kg）</div>
       </div>
-      ${months.length === 0 ? `<p class="empty-state">還沒有可計算的訓練容量,記錄動作時記得填重量喔</p>` : `
+      ${months.length === 0 ? `<p class="empty-state">還沒有可計算的訓練容量，記錄動作時記得填重量喔</p>` : `
       <div class="field" style="margin-top:16px;">
         <div class="field-label">選擇月份</div>
-        <div class="chip-row">${months.map(m => `
-          <button onclick="selectHistoryMonth('${m}')" class="chip-sm" style="${state.historyMonth===m ? 'background:#159C93;color:#fff;' : ''}">${formatMonthLabel(m)}</button>
-        `).join('')}</div>
+        <select onchange="selectHistoryMonth(this.value)">
+          ${months.map(m => `<option value="${m}" ${state.historyMonth===m?'selected':''}>${formatMonthLabel(m)}</option>`).join('')}
+        </select>
       </div>
       <div style="margin-top:14px;margin-bottom:${monthSeries.length ? '14px' : '0'};">
         <div class="font-display mono" style="font-size:22px;font-weight:700;color:#233330;">${monthAvg.toLocaleString()}</div>
-        <div style="font-size:13px;color:#6E8C89;margin-top:2px;">${formatMonthLabel(state.historyMonth)} 平均每堂(kg)</div>
+        <div style="font-size:13px;color:#6E8C89;margin-top:2px;">${formatMonthLabel(state.historyMonth)} 平均每堂（kg）</div>
       </div>
       ${monthSeries.map(x => `
         <div style="margin-bottom:10px;">
