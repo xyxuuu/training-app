@@ -170,8 +170,8 @@
   .nav-bar { position: fixed; left: 0; right: 0; bottom: 0; background: #fff; border-top: 1px solid #DCEEEC; z-index: 30; }
   .nav-inner { max-width: 640px; margin: 0 auto; display: flex; justify-content: space-around; padding: 6px 0; }
   .nav-btn {
-    display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 7px 18px;
-    border-radius: 10px; background: none; border: none; color: #9BB5B2; font-size: 12px;
+    display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 7px 6px;
+    border-radius: 10px; background: none; border: none; color: #9BB5B2; font-size: 11px;
     font-family: inherit; cursor: pointer; flex: 1;
   }
   .nav-btn.active { color: #159C93; }
@@ -218,6 +218,7 @@
   <div class="nav-inner">
     <button onclick="setTab('log')" id="nav-log" class="nav-btn"></button>
     <button onclick="setTab('history')" id="nav-history" class="nav-btn"></button>
+    <button onclick="setTab('schedule')" id="nav-schedule" class="nav-btn"></button>
     <button onclick="setTab('settings')" id="nav-settings" class="nav-btn"></button>
   </div>
 </div>
@@ -279,6 +280,7 @@ const state = {
   roster: loadRoster(),
   tab: 'log',
   rows: [],
+  schedule: [],
   loadingRows: false,
   fetchError: '',
   savingId: null,
@@ -294,6 +296,13 @@ const state = {
   editingStudent: null,
   studentEditDraft: {},
   expandedMaxWeights: null,
+  dateEditOpen: false,
+  dateEditValue: '',
+  copyPanelOpen: false,
+  copyPanelDate: '',
+  scheduleForm: { student: '', date: todayStr(), time: '', notes: '' },
+  editingScheduleId: null,
+  scheduleEditDraft: {},
 };
 
 function todayStr() {
@@ -362,6 +371,9 @@ async function fetchRows() {
           state.roster = data.roster;
           localStorage.setItem('roster', JSON.stringify(state.roster));
         }
+      }
+      if (Array.isArray(data.schedule)) {
+        state.schedule = data.schedule.map(s => ({ ...s, '日期': normalizeDateStr(s['日期']) }));
       }
     } else {
       state.fetchError = data.message || '讀取失敗';
@@ -450,6 +462,185 @@ async function saveEditStudent(originalName) {
 }
 function toggleMaxWeights(name) {
   state.expandedMaxWeights = state.expandedMaxWeights === name ? null : name;
+  render();
+}
+
+// ---- 行程表 ----
+function selectScheduleStudent(name) { state.scheduleForm.student = name; render(); }
+
+async function submitSchedule() {
+  if (!state.scheduleForm.student || !state.scheduleForm.date) {
+    showToast('請選學生跟日期');
+    return;
+  }
+  state.savingId = 'newSchedule';
+  render();
+  const payload = {
+    action: 'addSchedule',
+    studentName: state.scheduleForm.student,
+    date: state.scheduleForm.date,
+    time: state.scheduleForm.time,
+    notes: state.scheduleForm.notes,
+  };
+  try {
+    const res = await fetch(state.sheetUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (data.status === 'ok') {
+      state.schedule.push({
+        ID: data.id, 學生姓名: payload.studentName, 日期: payload.date,
+        時間: payload.time, 備注: payload.notes, 建立時間: new Date().toISOString(),
+      });
+      state.scheduleForm = { student: state.scheduleForm.student, date: todayStr(), time: '', notes: '' };
+      showToast('已新增行程');
+    } else {
+      showToast('新增失敗');
+    }
+  } catch (e) {
+    showToast('連線失敗');
+  } finally {
+    state.savingId = null;
+    render();
+  }
+}
+
+function startEditSchedule(s) {
+  state.editingScheduleId = s.ID;
+  state.scheduleEditDraft = { student: s['學生姓名'], date: s['日期'], time: s['時間'] || '', notes: s['備注'] || '' };
+  render();
+}
+function cancelEditSchedule() { state.editingScheduleId = null; render(); }
+async function saveEditSchedule(id) {
+  state.savingId = id;
+  render();
+  try {
+    const res = await fetch(state.sheetUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'updateSchedule', id,
+        studentName: state.scheduleEditDraft.student, date: state.scheduleEditDraft.date,
+        time: state.scheduleEditDraft.time, notes: state.scheduleEditDraft.notes,
+      }),
+    });
+    const data = await res.json();
+    if (data.status === 'ok') {
+      state.schedule = state.schedule.map(s => s.ID === id ? {
+        ...s, 學生姓名: state.scheduleEditDraft.student, 日期: state.scheduleEditDraft.date,
+        時間: state.scheduleEditDraft.time, 備注: state.scheduleEditDraft.notes,
+      } : s);
+      state.editingScheduleId = null;
+      showToast('已更新');
+    } else {
+      showToast('更新失敗');
+    }
+  } catch (e) {
+    showToast('連線失敗');
+  } finally {
+    state.savingId = null;
+    render();
+  }
+}
+async function deleteScheduleItem(id) {
+  if (!confirm('確定要刪除這筆行程嗎？')) return;
+  state.savingId = id;
+  render();
+  try {
+    const res = await fetch(state.sheetUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'deleteSchedule', id }),
+    });
+    const data = await res.json();
+    if (data.status === 'ok') {
+      state.schedule = state.schedule.filter(s => s.ID !== id);
+      showToast('已刪除');
+    } else {
+      showToast('刪除失敗');
+    }
+  } catch (e) {
+    showToast('連線失敗');
+  } finally {
+    state.savingId = null;
+    render();
+  }
+}
+
+// ---- 課程改期 / 複製到其他天 ----
+function toggleDateEdit(currentDate) {
+  state.dateEditOpen = !state.dateEditOpen;
+  state.dateEditValue = currentDate;
+  state.copyPanelOpen = false;
+  render();
+}
+async function saveSessionDate(student, oldDate) {
+  const newDate = state.dateEditValue;
+  if (!newDate || newDate === oldDate) { state.dateEditOpen = false; render(); return; }
+  try {
+    const res = await fetch(state.sheetUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'moveSessionDate', studentName: student, oldDate, newDate }),
+    });
+    const data = await res.json();
+    if (data.status === 'ok') {
+      state.rows = state.rows.map(r => (r['學生姓名'] === student && r['日期'] === oldDate) ? { ...r, '日期': newDate } : r);
+      state.selectedSessionKey = `${student}||${newDate}`;
+      state.dateEditOpen = false;
+      showToast('日期已更新');
+      render();
+    } else {
+      showToast('更新失敗');
+    }
+  } catch (e) {
+    showToast('連線失敗');
+  }
+}
+
+function toggleCopyPanel(currentDate) {
+  state.copyPanelOpen = !state.copyPanelOpen;
+  state.copyPanelDate = currentDate;
+  state.dateEditOpen = false;
+  render();
+}
+async function confirmCopySession(student, date) {
+  const targetDate = state.copyPanelDate;
+  if (!targetDate) { showToast('請選要複製到哪一天'); return; }
+  const exercises = getOrderedSessionExercises(student, date);
+  if (exercises.length === 0) return;
+  state.copyPanelOpen = false;
+  showToast('複製中…');
+  render();
+  let order = 0;
+  for (const ex of exercises) {
+    order++;
+    const payload = {
+      action: 'add', studentName: student, date: targetDate,
+      purpose: ex['訓練目的'] || '', sessionNote: '', exercise: ex['動作名稱'] || '',
+      order, sets: ex['組數'] || '', reps: ex['次數'] || '', weight: ex['重量'] || '',
+      duration: ex['秒數'] || '', notes: '',
+    };
+    try {
+      const res = await fetch(state.sheetUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (data.status === 'ok') {
+        state.rows.push({
+          ID: data.id, 學生姓名: student, 日期: targetDate, 訓練目的: payload.purpose,
+          本堂備註: '', 動作名稱: payload.exercise, 順序: order, 組數: payload.sets,
+          次數: payload.reps, 重量: payload.weight, 秒數: payload.duration, 備注: '',
+          課後檢討: '', 建立時間: new Date().toISOString(),
+        });
+      }
+    } catch (e) {}
+  }
+  showToast(`已複製到 ${fmtDate(targetDate)}`);
   render();
 }
 
@@ -873,8 +1064,8 @@ function jumpToSession(key) {
   state.selectedSessionKey = null;
   render();
 }
-function selectSession(key) { state.selectedSessionKey = key; render(); }
-function backToHistory() { state.selectedSessionKey = null; render(); }
+function selectSession(key) { state.selectedSessionKey = key; state.dateEditOpen = false; state.copyPanelOpen = false; render(); }
+function backToHistory() { state.selectedSessionKey = null; state.dateEditOpen = false; state.copyPanelOpen = false; render(); }
 
 function bindLiveInput(id, path) {
   const el = document.getElementById(id);
@@ -1043,13 +1234,35 @@ function renderHistory() {
           <div class="session-name">${esc(s.student)}</div>
           ${s.purpose ? `<span class="tag-purpose">${esc(s.purpose)}</span>` : ''}
         </div>
-        <div class="session-date">${fmtDate(s.date)}${vol > 0 ? ` · 訓練容量 <span class="mono" style="color:#159C93;font-weight:600;">${vol.toLocaleString()} kg</span>` : ''}</div>
+        <div class="session-date">
+          ${fmtDate(s.date)}${vol > 0 ? ` · 訓練容量 <span class="mono" style="color:#159C93;font-weight:600;">${vol.toLocaleString()} kg</span>` : ''}
+          <button onclick="toggleDateEdit('${s.date}')" class="icon-btn" style="padding:2px 4px;">${ic('pencil',14)}</button>
+        </div>
+        ${state.dateEditOpen ? `
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid #DCEEEC;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <input type="date" value="${esc(state.dateEditValue)}" onchange="state.dateEditValue=this.value;" style="width:auto;" />
+          <button onclick="saveSessionDate('${s.student.replace(/'/g,"&#39;")}', '${s.date}')" class="btn-secondary" style="background:#159C93;color:#fff;border-color:#159C93;padding:9px 14px;">${ic('check',14)}儲存新日期</button>
+          <button onclick="toggleDateEdit('')" class="btn-text">取消</button>
+        </div>` : ''}
         ${s.sessionNote ? `<div class="session-note">本堂備註：${esc(s.sessionNote)}</div>` : ''}
       </div>
       <div class="drag-list">${s.exercises.map(exerciseRowHtml).join('')}</div>
       <button onclick="jumpToSession('${s.key.replace(/'/g,"&#39;")}')" class="btn-primary" style="margin-top:12px;">
         ${ic('plus',18)}在這堂繼續新增動作
       </button>
+      <button onclick="toggleCopyPanel('${todayStr()}')" class="btn-secondary" style="width:100%;justify-content:center;margin-top:10px;">
+        ${ic('copy',16)}複製這堂到其他天
+      </button>
+      ${state.copyPanelOpen ? `
+      <div class="card" style="margin-top:10px;">
+        <div class="field-label">複製到哪一天？</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px;">
+          <input type="date" value="${esc(state.copyPanelDate)}" onchange="state.copyPanelDate=this.value;" style="width:auto;" />
+          <button onclick="confirmCopySession('${s.student.replace(/'/g,"&#39;")}', '${s.date}')" class="btn-secondary" style="background:#159C93;color:#fff;border-color:#159C93;padding:9px 14px;">確認複製</button>
+          <button onclick="toggleCopyPanel('')" class="btn-text">取消</button>
+        </div>
+        <p style="font-size:12px;color:#9BB5B2;margin:8px 0 0;">會複製動作、組數、次數、重量、秒數，不會複製課後檢討跟本堂備註</p>
+      </div>` : ''}
       <button onclick="deleteSession('${s.student.replace(/'/g,"&#39;")}', '${s.date}')" class="btn-secondary" style="width:100%;justify-content:center;margin-top:10px;color:#B23A2E;border-color:#F3C9C4;">
         ${ic('trash',16)}刪除整堂紀錄
       </button>
@@ -1161,6 +1374,97 @@ function renderHistoryResults() {
   return summaryHtml + listHtml;
 }
 
+function scheduleRowHtml(s) {
+  const isEditing = state.editingScheduleId === s.ID;
+  const busy = state.savingId === s.ID;
+  if (isEditing) {
+    return `
+    <div class="edit-card" style="margin-bottom:10px;">
+      <div class="field">
+        <div class="field-label">學生</div>
+        <div class="chip-row">${state.roster.map(r => `
+          <button onclick="state.scheduleEditDraft.student='${esc(r.name).replace(/'/g,"&#39;")}';render();" class="chip ${state.scheduleEditDraft.student===r.name?'selected':''}">${esc(r.name)}</button>
+        `).join('')}</div>
+      </div>
+      <div class="row2 field">
+        <input type="date" value="${esc(state.scheduleEditDraft.date)}" onchange="state.scheduleEditDraft.date=this.value;" />
+        <input id="schedule-edit-time" type="time" value="${esc(state.scheduleEditDraft.time)}" />
+      </div>
+      <div class="field"><textarea id="schedule-edit-notes" rows="2" placeholder="備注（選填）">${esc(state.scheduleEditDraft.notes)}</textarea></div>
+      <div class="btn-row" style="justify-content:flex-end;">
+        <button onclick="cancelEditSchedule()" class="btn-text">取消</button>
+        <button onclick="saveEditSchedule('${s.ID}')" ${busy?'disabled':''} class="btn-secondary" style="background:#159C93;color:#fff;border-color:#159C93;">${ic(busy?'loader':'check',14,busy)}儲存</button>
+      </div>
+    </div>`;
+  }
+  return `
+  <div class="exercise-card" style="margin-bottom:10px;">
+    <div class="exercise-top">
+      <div style="flex:1;min-width:0;">
+        <div class="exercise-name">${esc(s['學生姓名'])}</div>
+        <div class="exercise-meta" style="font-family:inherit;">${fmtDate(s['日期'])}${s['時間'] ? ' ' + esc(s['時間']) : ''}</div>
+        ${s['備注'] ? `<div class="exercise-note">${esc(s['備注'])}</div>` : ''}
+      </div>
+      <div class="exercise-actions">
+        <button onclick='startEditSchedule(${JSON.stringify(s).replace(/'/g,"&#39;")})' class="icon-btn">${ic('pencil',16)}</button>
+        <button onclick="deleteScheduleItem('${s.ID}')" ${busy?'disabled':''} class="icon-btn">${ic(busy?'loader':'trash',16,busy)}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderSchedule() {
+  const today = todayStr();
+  const upcoming = state.schedule
+    .filter(s => s['日期'] >= today)
+    .sort((a,b) => (a['日期']+((a['時間']||''))).localeCompare(b['日期']+((b['時間']||''))));
+  const past = state.schedule
+    .filter(s => s['日期'] < today)
+    .sort((a,b) => (b['日期']+((b['時間']||''))).localeCompare(a['日期']+((a['時間']||''))));
+
+  return `
+  <div class="content">
+    <div class="card">
+      <h3 class="card-title">安排下次上課</h3>
+      <div class="field">
+        <div class="field-label">${ic('users',14)} 學生</div>
+        ${state.roster.length === 0
+          ? `<p style="color:#C0392B;font-size:14px;margin:0;">尚未新增學生，請到「設定」加入學生名單</p>`
+          : `<div class="chip-row">${state.roster.map(s => `
+            <button onclick="selectScheduleStudent('${esc(s.name).replace(/'/g,"&#39;")}')" class="chip ${state.scheduleForm.student===s.name?'selected':''}">${esc(s.name)}</button>
+          `).join('')}</div>`}
+      </div>
+      <div class="row2 field">
+        <div>
+          <div class="field-label">${ic('calendar',14)} 日期</div>
+          <input type="date" value="${esc(state.scheduleForm.date)}" onchange="state.scheduleForm.date=this.value;" />
+        </div>
+        <div>
+          <div class="field-label">時間（選填）</div>
+          <input id="schedule-time" type="time" value="${esc(state.scheduleForm.time)}" />
+        </div>
+      </div>
+      <div class="field"><textarea id="schedule-notes" rows="2" placeholder="備注（選填），例如要準備的器材、上次約定的內容...">${esc(state.scheduleForm.notes)}</textarea></div>
+      <button onclick="submitSchedule()" ${state.savingId==='newSchedule'?'disabled':''} class="btn-primary">
+        ${ic(state.savingId==='newSchedule'?'loader':'plus', 18, state.savingId==='newSchedule')}新增行程
+      </button>
+    </div>
+
+    <div class="block" style="margin-top:16px;">
+      <h3 class="card-title">即將上課</h3>
+      ${upcoming.length === 0
+        ? `<p class="empty-state">還沒有安排任何行程</p>`
+        : upcoming.map(scheduleRowHtml).join('')}
+    </div>
+
+    ${past.length > 0 ? `
+    <div class="block" style="margin-top:16px;">
+      <h3 class="card-title">已過期</h3>
+      ${past.map(scheduleRowHtml).join('')}
+    </div>` : ''}
+  </div>`;
+}
+
 function renderSettings() {
   return `
   <div class="content">
@@ -1262,6 +1566,7 @@ function render() {
     }
     if (state.tab === 'log') html += renderLog();
     else if (state.tab === 'history') html += renderHistory();
+    else if (state.tab === 'schedule') html += renderSchedule();
     else if (state.tab === 'settings') html += renderSettings();
   }
 
@@ -1270,8 +1575,9 @@ function render() {
   document.getElementById('header-icon').innerHTML = ic('dumbbell', 26);
   document.getElementById('nav-log').innerHTML = ic('plus',22) + '<span>新增紀錄</span>';
   document.getElementById('nav-history').innerHTML = ic('clipboard',22) + '<span>歷史紀錄</span>';
+  document.getElementById('nav-schedule').innerHTML = ic('calendar',22) + '<span>行程表</span>';
   document.getElementById('nav-settings').innerHTML = ic('settings',22) + '<span>設定</span>';
-  ['log','history','settings'].forEach(t => {
+  ['log','history','schedule','settings'].forEach(t => {
     document.getElementById('nav-' + t).classList.toggle('active', state.tab === t);
   });
 
@@ -1297,6 +1603,10 @@ function render() {
   bindLiveInput('edit-notes', 'editDraft.notes');
   bindHistorySearch();
   setupDragHandles();
+  bindLiveInput('schedule-time', 'scheduleForm.time');
+  bindLiveInput('schedule-notes', 'scheduleForm.notes');
+  bindLiveInput('schedule-edit-time', 'scheduleEditDraft.time');
+  bindLiveInput('schedule-edit-notes', 'scheduleEditDraft.notes');
 }
 
 // 歷史紀錄搜尋框:即時篩選但只更新結果區塊,不整頁重繪,避免打字打到一半失焦
