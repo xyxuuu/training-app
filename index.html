@@ -1443,10 +1443,9 @@ function studentScheduleCardHtml(student) {
   const past = items.filter(s => s['日期'] < today);
   const color = getStudentColor(student.name);
   return `
-  <div class="card" style="margin-bottom:10px;">
+  <div class="card" style="margin-bottom:10px;border-left:5px solid ${color.text};">
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
-      <span style="width:10px;height:10px;border-radius:3px;background:${color.bg};border:1px solid ${color.text};display:inline-block;"></span>
-      <div class="exercise-name" style="font-size:16px;">${esc(student.name)}</div>
+      <span style="background:${color.bg};color:${color.text};font-weight:700;font-size:16px;padding:4px 12px;border-radius:8px;">${esc(student.name)}</span>
       ${student.gym ? `<span class="tag-purpose">${esc(student.gym)}</span>` : ''}
     </div>
     ${upcoming.length === 0 && past.length === 0
