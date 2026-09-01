@@ -292,7 +292,7 @@ const state = {
   historySearch: '',
   historyMonth: '',
   urlDraft: localStorage.getItem('apps_script_url') || '',
-  newStudent: { name: '', gender: '', birthday: '', totalSessions: '', baseUsed: '' },
+  newStudent: { name: '', gender: '', birthday: '', totalSessions: '', baseUsed: '', colorIndex: '' },
   editingStudent: null,
   studentEditDraft: {},
   expandedMaxWeights: null,
@@ -301,9 +301,43 @@ const state = {
   copyPanelOpen: false,
   copyPanelDate: '',
   scheduleForm: { student: '', date: todayStr(), time: '', notes: '' },
-  editingScheduleId: null,
-  scheduleEditDraft: {},
+  scheduleViewMonth: todayStr().slice(0, 7),
+  scheduleSelectedDate: null,
+  scheduleSlotEditing: null,
+  scheduleSlotForm: { student: '', notes: '', blocked: false, editingId: null },
 };
+
+const SCHEDULE_HOURS = (() => {
+  const list = [];
+  for (let h = 8; h <= 21; h++) {
+    list.push(`${String(h).padStart(2,'0')}:00`);
+    list.push(`${String(h).padStart(2,'0')}:30`);
+  }
+  return list;
+})();
+
+// 每位學生固定一個顏色,方便在月曆上一眼分辨
+const SCHEDULE_COLORS = [
+  { bg: '#E7F7F5', text: '#0E7A72' },
+  { bg: '#F5E6C8', text: '#8A5A22' },
+  { bg: '#EDE3F5', text: '#6B3F94' },
+  { bg: '#FBE3E3', text: '#B23A5C' },
+  { bg: '#E0F0FB', text: '#1D6FA5' },
+  { bg: '#E6EFDD', text: '#4A7A2E' },
+  { bg: '#FBE8D9', text: '#B5651D' },
+  { bg: '#E6E9ED', text: '#43536B' },
+];
+function getStudentColor(name) {
+  if (!name) return { bg: '#F3F0EC', text: '#8A8378' }; // 不可用用中性灰
+  const student = state.roster.find(s => s.name === name);
+  if (student && student.colorIndex !== undefined && student.colorIndex !== null && student.colorIndex !== '') {
+    const idx = parseInt(student.colorIndex, 10);
+    if (SCHEDULE_COLORS[idx]) return SCHEDULE_COLORS[idx];
+  }
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  return SCHEDULE_COLORS[hash % SCHEDULE_COLORS.length];
+}
 
 function todayStr() {
   const d = new Date();
@@ -404,11 +438,14 @@ function addStudent() {
   state.roster.push({
     name, gender: state.newStudent.gender, birthday: state.newStudent.birthday,
     totalSessions: state.newStudent.totalSessions, baseUsed: state.newStudent.baseUsed,
+    colorIndex: state.newStudent.colorIndex,
   });
-  state.newStudent = { name: '', gender: '', birthday: '', totalSessions: '', baseUsed: '' };
+  state.newStudent = { name: '', gender: '', birthday: '', totalSessions: '', baseUsed: '', colorIndex: '' };
   saveRoster();
   render();
 }
+function selectNewStudentColor(idx) { state.newStudent.colorIndex = idx; render(); }
+function selectEditStudentColor(idx) { state.studentEditDraft.colorIndex = idx; render(); }
 function removeStudent(name) {
   const ok = confirm(`確定要把「${name}」從學生目錄移除嗎？\n\n（他過去的訓練紀錄不會被刪除，只是這裡的快速選單不會再顯示他，之後要用可以再加回來）`);
   if (!ok) return;
@@ -418,7 +455,11 @@ function removeStudent(name) {
 }
 function startEditStudent(s) {
   state.editingStudent = s.name;
-  state.studentEditDraft = { name: s.name, gender: s.gender || '', birthday: s.birthday || '', totalSessions: s.totalSessions || '', baseUsed: s.baseUsed || '' };
+  state.studentEditDraft = {
+    name: s.name, gender: s.gender || '', birthday: s.birthday || '',
+    totalSessions: s.totalSessions || '', baseUsed: s.baseUsed || '',
+    colorIndex: s.colorIndex !== undefined && s.colorIndex !== null ? s.colorIndex : '',
+  };
   render();
 }
 function cancelEditStudent() { state.editingStudent = null; render(); }
@@ -433,6 +474,7 @@ async function saveEditStudent(originalName) {
   state.roster = state.roster.map(s => s.name === originalName ? {
     name: newName, gender: state.studentEditDraft.gender, birthday: state.studentEditDraft.birthday,
     totalSessions: state.studentEditDraft.totalSessions, baseUsed: state.studentEditDraft.baseUsed,
+    colorIndex: state.studentEditDraft.colorIndex,
   } : s);
   if (state.session.student === originalName) state.session.student = newName;
   if (state.historySearch === originalName) state.historySearch = newName;
@@ -465,39 +507,105 @@ function toggleMaxWeights(name) {
   render();
 }
 
-// ---- 行程表 ----
-function selectScheduleStudent(name) { state.scheduleForm.student = name; render(); }
+// ---- 行程表(月曆) ----
+function changeScheduleMonth(delta) {
+  const [y, m] = state.scheduleViewMonth.split('-').map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  state.scheduleViewMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  render();
+}
+function goToScheduleToday() {
+  state.scheduleViewMonth = todayStr().slice(0, 7);
+  render();
+}
+function getMonthGridDays(yearMonth) {
+  const [y, m] = yearMonth.split('-').map(Number);
+  const firstOfMonth = new Date(y, m - 1, 1);
+  const startOffset = firstOfMonth.getDay();
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < startOffset; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) {
+    cells.push(`${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+  }
+  return cells;
+}
+function formatMonthTitle(yearMonth) {
+  const [y, m] = yearMonth.split('-');
+  return `${y} 年 ${parseInt(m, 10)} 月`;
+}
 
-async function submitSchedule() {
-  if (!state.scheduleForm.student || !state.scheduleForm.date) {
-    showToast('請選學生跟日期');
+function openScheduleDay(date) {
+  state.scheduleSelectedDate = date;
+  state.scheduleSlotEditing = null;
+  render();
+}
+function closeScheduleDay() {
+  state.scheduleSelectedDate = null;
+  state.scheduleSlotEditing = null;
+  render();
+}
+
+function openSlotForm(time) {
+  state.scheduleSlotEditing = time;
+  state.scheduleSlotForm = { student: '', notes: '', blocked: false, editingId: null };
+  render();
+}
+function openSlotFormForEdit(item) {
+  state.scheduleSlotEditing = item['時間'];
+  state.scheduleSlotForm = {
+    student: item['學生姓名'] || '', notes: item['備注'] || '',
+    blocked: !item['學生姓名'], editingId: item.ID,
+  };
+  render();
+}
+function closeSlotForm() {
+  state.scheduleSlotEditing = null;
+  render();
+}
+function toggleSlotBlocked(blocked) {
+  state.scheduleSlotForm.blocked = blocked;
+  if (blocked) state.scheduleSlotForm.student = '';
+  render();
+}
+function selectSlotStudent(name) {
+  state.scheduleSlotForm.student = name;
+  state.scheduleSlotForm.blocked = false;
+  render();
+}
+
+async function submitSlot(date, time) {
+  if (!state.scheduleSlotForm.blocked && !state.scheduleSlotForm.student) {
+    showToast('請選學生，或標記為不可用');
     return;
   }
-  state.savingId = 'newSchedule';
+  const editingId = state.scheduleSlotForm.editingId;
+  const studentName = state.scheduleSlotForm.blocked ? '' : state.scheduleSlotForm.student;
+  const notes = state.scheduleSlotForm.notes;
+  state.savingId = editingId || ('slot-' + time);
   render();
-  const payload = {
-    action: 'addSchedule',
-    studentName: state.scheduleForm.student,
-    date: state.scheduleForm.date,
-    time: state.scheduleForm.time,
-    notes: state.scheduleForm.notes,
-  };
   try {
     const res = await fetch(state.sheetUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(editingId
+        ? { action: 'updateSchedule', id: editingId, studentName, date, time, notes }
+        : { action: 'addSchedule', studentName, date, time, notes }),
     });
     const data = await res.json();
     if (data.status === 'ok') {
-      state.schedule.push({
-        ID: data.id, 學生姓名: payload.studentName, 日期: payload.date,
-        時間: payload.time, 備注: payload.notes, 建立時間: new Date().toISOString(),
-      });
-      state.scheduleForm = { student: state.scheduleForm.student, date: todayStr(), time: '', notes: '' };
-      showToast('已新增行程');
+      if (editingId) {
+        state.schedule = state.schedule.map(s => s.ID === editingId ? { ...s, 學生姓名: studentName, 備注: notes } : s);
+      } else {
+        state.schedule.push({
+          ID: data.id, 學生姓名: studentName, 日期: date,
+          時間: time, 備注: notes, 建立時間: new Date().toISOString(),
+        });
+      }
+      state.scheduleSlotEditing = null;
+      showToast(studentName ? '已安排' : '已標記不可用');
     } else {
-      showToast('新增失敗');
+      showToast(editingId ? '更新失敗' : '新增失敗');
     }
   } catch (e) {
     showToast('連線失敗');
@@ -507,43 +615,6 @@ async function submitSchedule() {
   }
 }
 
-function startEditSchedule(s) {
-  state.editingScheduleId = s.ID;
-  state.scheduleEditDraft = { student: s['學生姓名'], date: s['日期'], time: s['時間'] || '', notes: s['備注'] || '' };
-  render();
-}
-function cancelEditSchedule() { state.editingScheduleId = null; render(); }
-async function saveEditSchedule(id) {
-  state.savingId = id;
-  render();
-  try {
-    const res = await fetch(state.sheetUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({
-        action: 'updateSchedule', id,
-        studentName: state.scheduleEditDraft.student, date: state.scheduleEditDraft.date,
-        time: state.scheduleEditDraft.time, notes: state.scheduleEditDraft.notes,
-      }),
-    });
-    const data = await res.json();
-    if (data.status === 'ok') {
-      state.schedule = state.schedule.map(s => s.ID === id ? {
-        ...s, 學生姓名: state.scheduleEditDraft.student, 日期: state.scheduleEditDraft.date,
-        時間: state.scheduleEditDraft.time, 備注: state.scheduleEditDraft.notes,
-      } : s);
-      state.editingScheduleId = null;
-      showToast('已更新');
-    } else {
-      showToast('更新失敗');
-    }
-  } catch (e) {
-    showToast('連線失敗');
-  } finally {
-    state.savingId = null;
-    render();
-  }
-}
 async function deleteScheduleItem(id) {
   if (!confirm('確定要刪除這筆行程嗎？')) return;
   state.savingId = id;
@@ -1374,95 +1445,124 @@ function renderHistoryResults() {
   return summaryHtml + listHtml;
 }
 
-function scheduleRowHtml(s) {
-  const isEditing = state.editingScheduleId === s.ID;
-  const busy = state.savingId === s.ID;
-  if (isEditing) {
-    return `
-    <div class="edit-card" style="margin-bottom:10px;">
-      <div class="field">
-        <div class="field-label">學生</div>
-        <div class="chip-row">${state.roster.map(r => `
-          <button onclick="state.scheduleEditDraft.student='${esc(r.name).replace(/'/g,"&#39;")}';render();" class="chip ${state.scheduleEditDraft.student===r.name?'selected':''}">${esc(r.name)}</button>
-        `).join('')}</div>
-      </div>
-      <div class="row2 field">
-        <input type="date" value="${esc(state.scheduleEditDraft.date)}" onchange="state.scheduleEditDraft.date=this.value;" />
-        <input id="schedule-edit-time" type="time" value="${esc(state.scheduleEditDraft.time)}" />
-      </div>
-      <div class="field"><textarea id="schedule-edit-notes" rows="2" placeholder="備注（選填）">${esc(state.scheduleEditDraft.notes)}</textarea></div>
-      <div class="btn-row" style="justify-content:flex-end;">
-        <button onclick="cancelEditSchedule()" class="btn-text">取消</button>
-        <button onclick="saveEditSchedule('${s.ID}')" ${busy?'disabled':''} class="btn-secondary" style="background:#159C93;color:#fff;border-color:#159C93;">${ic(busy?'loader':'check',14,busy)}儲存</button>
-      </div>
-    </div>`;
-  }
+function renderScheduleMonth() {
+  const cells = getMonthGridDays(state.scheduleViewMonth);
+  const today = todayStr();
+  const weekdayNames = ['日','一','二','三','四','五','六'];
+
   return `
-  <div class="exercise-card" style="margin-bottom:10px;">
-    <div class="exercise-top">
-      <div style="flex:1;min-width:0;">
-        <div class="exercise-name">${esc(s['學生姓名'])}</div>
-        <div class="exercise-meta" style="font-family:inherit;">${fmtDate(s['日期'])}${s['時間'] ? ' ' + esc(s['時間']) : ''}</div>
-        ${s['備注'] ? `<div class="exercise-note">${esc(s['備注'])}</div>` : ''}
+  <div class="content">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <button onclick="changeScheduleMonth(-1)" class="icon-btn">${ic('chevronLeft',20)}</button>
+        <div style="text-align:center;">
+          <div class="font-display" style="font-size:18px;font-weight:700;">${formatMonthTitle(state.scheduleViewMonth)}</div>
+          ${state.scheduleViewMonth !== today.slice(0,7) ? `<button onclick="goToScheduleToday()" class="btn-text" style="padding:2px 0;font-size:13px;">回到本月</button>` : ''}
+        </div>
+        <button onclick="changeScheduleMonth(1)" class="icon-btn" style="transform:scaleX(-1);">${ic('chevronLeft',20)}</button>
       </div>
-      <div class="exercise-actions">
-        <button onclick='startEditSchedule(${JSON.stringify(s).replace(/'/g,"&#39;")})' class="icon-btn">${ic('pencil',16)}</button>
-        <button onclick="deleteScheduleItem('${s.ID}')" ${busy?'disabled':''} class="icon-btn">${ic(busy?'loader':'trash',16,busy)}</button>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:12px;">
+        ${weekdayNames.map(w => `<div style="font-size:12px;color:#9BB5B2;padding:4px 0;text-align:center;">${w}</div>`).join('')}
+        ${cells.map(date => {
+          if (!date) return `<div></div>`;
+          const dayNum = parseInt(date.slice(8,10), 10);
+          const items = state.schedule.filter(s => s['日期'] === date).sort((a,b) => (a['時間']||'').localeCompare(b['時間']||''));
+          const isToday = date === today;
+          const shown = items.slice(0, 2);
+          const extra = items.length - shown.length;
+          return `
+          <button onclick="openScheduleDay('${date}')" style="min-height:66px;border-radius:8px;border:1px solid ${isToday?'#159C93':'#E6EEEC'};background:${isToday?'#E7F7F5':'#fff'};display:flex;flex-direction:column;align-items:flex-start;gap:2px;cursor:pointer;font-family:inherit;padding:4px 3px;overflow:hidden;">
+            <span style="font-size:12px;font-weight:${isToday?'700':'500'};color:${isToday?'#159C93':'#233330'};">${dayNum}</span>
+            ${shown.map(item => {
+              const color = getStudentColor(item['學生姓名']);
+              const label = item['學生姓名'] || '不可用';
+              return `<div style="background:${color.bg};color:${color.text};font-size:9px;line-height:1.4;padding:1px 3px;border-radius:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;width:100%;">${esc(label)}</div>`;
+            }).join('')}
+            ${extra > 0 ? `<div style="font-size:9px;color:#9BB5B2;">+${extra}</div>` : ''}
+          </button>`;
+        }).join('')}
+      </div>
+      <div style="display:flex;gap:16px;margin-top:14px;font-size:12px;color:#6E8C89;flex-wrap:wrap;">
+        ${state.roster.slice(0,6).map(r => {
+          const c = getStudentColor(r.name);
+          return `<span style="display:flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;border-radius:3px;background:${c.bg};border:1px solid ${c.text};display:inline-block;"></span>${esc(r.name)}</span>`;
+        }).join('')}
+        <span style="display:flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;border-radius:3px;background:#F3F0EC;border:1px solid #8A8378;display:inline-block;"></span>不可用</span>
       </div>
     </div>
   </div>`;
 }
 
-function renderSchedule() {
-  const today = todayStr();
-  const upcoming = state.schedule
-    .filter(s => s['日期'] >= today)
-    .sort((a,b) => (a['日期']+((a['時間']||''))).localeCompare(b['日期']+((b['時間']||''))));
-  const past = state.schedule
-    .filter(s => s['日期'] < today)
-    .sort((a,b) => (b['日期']+((b['時間']||''))).localeCompare(a['日期']+((a['時間']||''))));
+function scheduleSlotHtml(date, time) {
+  const item = state.schedule.find(s => s['日期'] === date && s['時間'] === time);
+  const isEditingSlot = state.scheduleSlotEditing === time;
+  const busy = state.savingId === (item ? item.ID : 'slot-' + time);
+
+  if (item && !isEditingSlot) {
+    const isBlocked = !item['學生姓名'];
+    const color = getStudentColor(item['學生姓名']);
+    return `
+    <div style="display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid #EDF3F1;">
+      <div class="mono" style="width:52px;flex-shrink:0;font-size:14px;color:#6E8C89;">${time}</div>
+      <div style="flex:1;min-width:0;padding:8px 12px;border-radius:8px;background:${color.bg};">
+        <div style="font-weight:600;font-size:15px;color:${color.text};">${isBlocked ? '不可用' : esc(item['學生姓名'])}</div>
+        ${item['備注'] ? `<div style="font-size:13px;color:#6E8C89;margin-top:2px;">${esc(item['備注'])}</div>` : ''}
+      </div>
+      <button onclick='openSlotFormForEdit(${JSON.stringify(item).replace(/'/g,"&#39;")})' class="icon-btn">${ic('pencil',16)}</button>
+      <button onclick="deleteScheduleItem('${item.ID}')" ${busy?'disabled':''} class="icon-btn">${ic(busy?'loader':'trash',16,busy)}</button>
+    </div>`;
+  }
+
+  if (isEditingSlot) {
+    return `
+    <div style="padding:12px 0;border-bottom:1px solid #EDF3F1;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <div class="mono" style="width:52px;flex-shrink:0;font-size:14px;color:#6E8C89;">${time}</div>
+        <div style="flex:1;display:flex;gap:8px;">
+          <button onclick="toggleSlotBlocked(false)" class="chip-sm" style="${!state.scheduleSlotForm.blocked?'background:#159C93;color:#fff;':''}">排學生</button>
+          <button onclick="toggleSlotBlocked(true)" class="chip-sm" style="${state.scheduleSlotForm.blocked?'background:#8A8378;color:#fff;':''}">標記不可用</button>
+        </div>
+      </div>
+      ${!state.scheduleSlotForm.blocked ? `
+      <div class="chip-row" style="margin-left:62px;margin-bottom:8px;">
+        ${state.roster.map(r => `<button onclick="selectSlotStudent('${esc(r.name).replace(/'/g,"&#39;")}')" class="chip ${state.scheduleSlotForm.student===r.name?'selected':''}">${esc(r.name)}</button>`).join('')}
+      </div>` : ''}
+      <div style="margin-left:62px;display:flex;gap:8px;align-items:flex-start;">
+        <input type="text" placeholder="備注（選填）" value="${esc(state.scheduleSlotForm.notes)}" oninput="state.scheduleSlotForm.notes=this.value;" style="flex:1;" />
+      </div>
+      <div style="margin-left:62px;margin-top:8px;display:flex;gap:8px;">
+        <button onclick="closeSlotForm()" class="btn-text">取消</button>
+        <button onclick="submitSlot('${date}','${time}')" ${busy?'disabled':''} class="btn-secondary" style="background:#159C93;color:#fff;border-color:#159C93;">${ic(busy?'loader':'check',14,busy)}確認</button>
+      </div>
+    </div>`;
+  }
 
   return `
+  <button onclick="openSlotForm('${time}')" style="width:100%;display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid #EDF3F1;background:none;border-left:none;border-right:none;border-top:none;cursor:pointer;font-family:inherit;text-align:left;">
+    <div class="mono" style="width:52px;flex-shrink:0;font-size:14px;color:#B5AC9C;">${time}</div>
+    <div style="flex:1;color:#B5AC9C;font-size:14px;">空著</div>
+    <span style="color:#B5AC9C;">${ic('plus',16)}</span>
+  </button>`;
+}
+
+function renderScheduleDay() {
+  const date = state.scheduleSelectedDate;
+  const d = new Date(date + 'T00:00:00');
+  const wd = ['日','一','二','三','四','五','六'][d.getDay()];
+  return `
   <div class="content">
+    <button onclick="closeScheduleDay()" class="back-link">${ic('chevronLeft',18)}返回月曆</button>
     <div class="card">
-      <h3 class="card-title">安排下次上課</h3>
-      <div class="field">
-        <div class="field-label">${ic('users',14)} 學生</div>
-        ${state.roster.length === 0
-          ? `<p style="color:#C0392B;font-size:14px;margin:0;">尚未新增學生，請到「設定」加入學生名單</p>`
-          : `<div class="chip-row">${state.roster.map(s => `
-            <button onclick="selectScheduleStudent('${esc(s.name).replace(/'/g,"&#39;")}')" class="chip ${state.scheduleForm.student===s.name?'selected':''}">${esc(s.name)}</button>
-          `).join('')}</div>`}
-      </div>
-      <div class="row2 field">
-        <div>
-          <div class="field-label">${ic('calendar',14)} 日期</div>
-          <input type="date" value="${esc(state.scheduleForm.date)}" onchange="state.scheduleForm.date=this.value;" />
-        </div>
-        <div>
-          <div class="field-label">時間（選填）</div>
-          <input id="schedule-time" type="time" value="${esc(state.scheduleForm.time)}" />
-        </div>
-      </div>
-      <div class="field"><textarea id="schedule-notes" rows="2" placeholder="備注（選填），例如要準備的器材、上次約定的內容...">${esc(state.scheduleForm.notes)}</textarea></div>
-      <button onclick="submitSchedule()" ${state.savingId==='newSchedule'?'disabled':''} class="btn-primary">
-        ${ic(state.savingId==='newSchedule'?'loader':'plus', 18, state.savingId==='newSchedule')}新增行程
-      </button>
+      <h3 class="card-title" style="margin-bottom:2px;">${d.getMonth()+1} 月 ${d.getDate()} 日（${wd}）</h3>
+      <p style="font-size:12px;color:#9BB5B2;margin:0 0 10px;">點空的時段可以排學生上課，或標記為不可用</p>
+      ${SCHEDULE_HOURS.map(time => scheduleSlotHtml(date, time)).join('')}
     </div>
-
-    <div class="block" style="margin-top:16px;">
-      <h3 class="card-title">即將上課</h3>
-      ${upcoming.length === 0
-        ? `<p class="empty-state">還沒有安排任何行程</p>`
-        : upcoming.map(scheduleRowHtml).join('')}
-    </div>
-
-    ${past.length > 0 ? `
-    <div class="block" style="margin-top:16px;">
-      <h3 class="card-title">已過期</h3>
-      ${past.map(scheduleRowHtml).join('')}
-    </div>` : ''}
   </div>`;
+}
+
+function renderSchedule() {
+  if (state.scheduleSelectedDate) return renderScheduleDay();
+  return renderScheduleMonth();
 }
 
 function renderSettings() {
@@ -1494,6 +1594,14 @@ function renderSettings() {
         <div class="field-label">生日（選填）</div>
         ${birthdayPicker('new-student-birthday', state.newStudent.birthday)}
       </div>
+      <div class="field">
+        <div class="field-label">行事曆顏色（選填，不選就自動分配）</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          ${SCHEDULE_COLORS.map((c, i) => `
+            <button onclick="selectNewStudentColor(${i})" style="width:32px;height:32px;border-radius:8px;background:${c.bg};border:2px solid ${String(state.newStudent.colorIndex)===String(i)?c.text:'transparent'};cursor:pointer;"></button>
+          `).join('')}
+        </div>
+      </div>
       <button onclick="addStudent()" class="btn-primary" style="margin-bottom:${state.roster.length?'16px':'0'};">${ic('plus',18)}新增學生</button>
 
       ${state.roster.map(s => {
@@ -1516,6 +1624,14 @@ function renderSettings() {
             <div class="field">
               <div class="field-label">生日（選填）</div>
               ${birthdayPicker('student-edit-birthday', state.studentEditDraft.birthday)}
+            </div>
+            <div class="field">
+              <div class="field-label">行事曆顏色（選填，不選就自動分配）</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                ${SCHEDULE_COLORS.map((c, i) => `
+                  <button onclick="selectEditStudentColor(${i})" style="width:32px;height:32px;border-radius:8px;background:${c.bg};border:2px solid ${String(state.studentEditDraft.colorIndex)===String(i)?c.text:'transparent'};cursor:pointer;"></button>
+                `).join('')}
+              </div>
             </div>
             <div class="btn-row" style="justify-content:flex-end;">
               <button onclick="cancelEditStudent()" class="btn-text">取消</button>
@@ -1603,10 +1719,6 @@ function render() {
   bindLiveInput('edit-notes', 'editDraft.notes');
   bindHistorySearch();
   setupDragHandles();
-  bindLiveInput('schedule-time', 'scheduleForm.time');
-  bindLiveInput('schedule-notes', 'scheduleForm.notes');
-  bindLiveInput('schedule-edit-time', 'scheduleEditDraft.time');
-  bindLiveInput('schedule-edit-notes', 'scheduleEditDraft.notes');
 }
 
 // 歷史紀錄搜尋框:即時篩選但只更新結果區塊,不整頁重繪,避免打字打到一半失焦
