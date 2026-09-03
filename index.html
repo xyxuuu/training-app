@@ -380,6 +380,15 @@ function normalizeDateStr(d) {
   return new Date(dt - tz).toISOString().slice(0, 10);
 }
 
+// 不管 Sheets 回來的時間是純文字 "18:30" 還是不小心被轉成完整時間戳記,都統一轉成 HH:MM
+function normalizeTimeStr(t) {
+  if (!t) return '';
+  if (/^\d{2}:\d{2}$/.test(t)) return t;
+  const dt = new Date(t);
+  if (isNaN(dt)) return t;
+  return `${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+}
+
 function fmtDate(dateStr) {
   if (!dateStr) return '';
   const d = new Date(dateStr + 'T00:00:00');
@@ -432,10 +441,10 @@ async function fetchRows() {
         }
       }
       if (Array.isArray(data.schedule)) {
-        state.schedule = data.schedule.map(s => ({ ...s, '日期': normalizeDateStr(s['日期']) }));
+        state.schedule = data.schedule.map(s => ({ ...s, '日期': normalizeDateStr(s['日期']), '時間': normalizeTimeStr(s['時間']) }));
       }
       if (Array.isArray(data.coachBlocks)) {
-        state.coachBlocks = data.coachBlocks;
+        state.coachBlocks = data.coachBlocks.map(b => ({ ...b, start: normalizeTimeStr(b.start), end: normalizeTimeStr(b.end) }));
       }
     } else {
       state.fetchError = data.message || '讀取失敗';
@@ -1690,7 +1699,7 @@ function studentScheduleCardHtml(student) {
   const suggestion = state.suggestedSlots && state.suggestedSlots.student === student.name ? state.suggestedSlots : null;
   const busy = state.savingId === 'confirmSlot';
   return `
-  <div class="card" style="margin-bottom:10px;border-left:5px solid ${color.text};">
+  <div id="${scheduleStudentAnchorId(student.name)}" class="card" style="margin-bottom:10px;border-left:5px solid ${color.text};">
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
       <span style="background:${color.bg};color:${color.text};font-weight:700;font-size:16px;padding:4px 12px;border-radius:8px;">${esc(student.name)}</span>
       ${student.gym ? `<span class="tag-purpose">${esc(student.gym)}</span>` : ''}
@@ -1746,14 +1755,44 @@ function renderWeekCalendar() {
   </div>`;
 }
 
+function getUnscheduledStudents() {
+  const today = todayStr();
+  return state.roster.filter(s => !state.schedule.some(item => item['學生姓名'] === s.name && item['日期'] >= today));
+}
+function scheduleStudentAnchorId(name) {
+  return 'student-sched-' + state.roster.findIndex(s => s.name === name);
+}
+function jumpToStudentSchedule(name) {
+  suggestNextSlot(name);
+  setTimeout(() => {
+    const el = document.getElementById(scheduleStudentAnchorId(name));
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 50);
+}
+
 function renderSchedule() {
   const gyms = Array.from(new Set(state.roster.map(s => s.gym).filter(Boolean)));
   const filteredRoster = state.scheduleGymFilter
     ? state.roster.filter(s => s.gym === state.scheduleGymFilter)
     : state.roster;
+  const unscheduled = getUnscheduledStudents();
 
   return `
   <div class="content">
+    ${state.roster.length === 0 ? '' : unscheduled.length > 0 ? `
+    <div class="card" style="margin-bottom:16px;border-left:5px solid #B23A2E;">
+      <h3 class="card-title" style="color:#B23A2E;">還沒安排下次上課（${unscheduled.length}）</h3>
+      <div class="chip-row">
+        ${unscheduled.map(s => {
+          const c = getStudentColor(s.name);
+          return `<button onclick="jumpToStudentSchedule('${esc(s.name).replace(/'/g,"&#39;")}')" style="background:${c.bg};color:${c.text};border:none;padding:8px 14px;border-radius:999px;font-size:15px;cursor:pointer;font-family:inherit;">${esc(s.name)}</button>`;
+        }).join('')}
+      </div>
+    </div>` : `
+    <div class="card" style="margin-bottom:16px;border-left:5px solid #159C93;">
+      <p style="font-size:14px;color:#0E7A72;margin:0;">${ic('check',14)} 所有學生都已經安排好下次上課了</p>
+    </div>`}
+
     ${renderWeekCalendar()}
 
     <div class="card" style="margin-top:16px;">
