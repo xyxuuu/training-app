@@ -321,8 +321,8 @@ const state = {
   historyMonth: '',
   urlDraft: localStorage.getItem('apps_script_url') || '',
   newStudent: { name: '', gender: '', birthday: '', totalSessions: '', baseUsed: '', colorIndex: '', gym: '', availability: [] },
-  newAvailDraft: { day: '1', start: '', end: '' },
-  editAvailDraft: { day: '1', start: '', end: '' },
+  newAvailDraft: { days: [], start: '', end: '' },
+  editAvailDraft: { days: [], start: '', end: '' },
   editingStudent: null,
   studentEditDraft: {},
   expandedMaxWeights: null,
@@ -332,6 +332,7 @@ const state = {
   copyPanelDate: '',
   scheduleForm: { student: '', date: todayStr(), time: '', notes: '' },
   scheduleGymFilter: '',
+  scheduleWeekStart: getWeekStart(todayStr()),
   editingScheduleId: null,
   scheduleLastEditedId: null,
   coachBlocks: [],
@@ -474,26 +475,49 @@ function addStudent() {
 }
 function selectNewStudentColor(idx) { state.newStudent.colorIndex = idx; render(); }
 function selectEditStudentColor(idx) { state.studentEditDraft.colorIndex = idx; render(); }
-function addNewAvailWindow() {
-  const { day, start, end } = state.newAvailDraft;
-  if (!start || !end) { showToast('請填開始跟結束時間'); return; }
-  state.newStudent.availability.push({ day: parseInt(day,10), start, end });
-  state.newAvailDraft = { day, start: '', end: '' };
+function toggleNewAvailDay(d) {
+  const idx = state.newAvailDraft.days.indexOf(d);
+  if (idx === -1) state.newAvailDraft.days.push(d); else state.newAvailDraft.days.splice(idx, 1);
   render();
 }
-function removeNewAvailWindow(idx) {
-  state.newStudent.availability.splice(idx, 1);
+function toggleEditAvailDay(d) {
+  const idx = state.editAvailDraft.days.indexOf(d);
+  if (idx === -1) state.editAvailDraft.days.push(d); else state.editAvailDraft.days.splice(idx, 1);
+  render();
+}
+function groupAvailability(availability) {
+  const map = new Map();
+  availability.forEach((w) => {
+    const key = w.start + '|' + w.end;
+    if (!map.has(key)) map.set(key, { start: w.start, end: w.end, days: [] });
+    map.get(key).days.push(w.day);
+  });
+  return Array.from(map.values()).map(g => ({ ...g, days: g.days.sort((a,b)=>a-b) }));
+}
+function addNewAvailWindow() {
+  const { days, start, end } = state.newAvailDraft;
+  if (!days.length || !start) { showToast('請至少選一天，並填開始時間'); return; }
+  days.forEach(d => state.newStudent.availability.push({ day: d, start, end: end || '' }));
+  state.newAvailDraft = { days: [], start: '', end: '' };
+  render();
+}
+function removeNewAvailGroup(start, end, days) {
+  state.newStudent.availability = state.newStudent.availability.filter(w =>
+    !(w.start === start && w.end === end && days.includes(w.day))
+  );
   render();
 }
 function addEditAvailWindow() {
-  const { day, start, end } = state.editAvailDraft;
-  if (!start || !end) { showToast('請填開始跟結束時間'); return; }
-  state.studentEditDraft.availability.push({ day: parseInt(day,10), start, end });
-  state.editAvailDraft = { day, start: '', end: '' };
+  const { days, start, end } = state.editAvailDraft;
+  if (!days.length || !start) { showToast('請至少選一天，並填開始時間'); return; }
+  days.forEach(d => state.studentEditDraft.availability.push({ day: d, start, end: end || '' }));
+  state.editAvailDraft = { days: [], start: '', end: '' };
   render();
 }
-function removeEditAvailWindow(idx) {
-  state.studentEditDraft.availability.splice(idx, 1);
+function removeEditAvailGroup(start, end, days) {
+  state.studentEditDraft.availability = state.studentEditDraft.availability.filter(w =>
+    !(w.start === start && w.end === end && days.includes(w.day))
+  );
   render();
 }
 function removeStudent(name) {
@@ -511,6 +535,7 @@ function startEditStudent(s) {
     colorIndex: s.colorIndex !== undefined && s.colorIndex !== null ? s.colorIndex : '',
     gym: s.gym || '', availability: (s.availability || []).slice(),
   };
+  state.editAvailDraft = { days: [], start: '', end: '' };
   render();
 }
 function cancelEditStudent() { state.editingStudent = null; render(); }
@@ -559,6 +584,43 @@ function toggleMaxWeights(name) {
   render();
 }
 
+// ---- 行程表週曆總覽 ----
+function getWeekStart(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const day = d.getDay(); // 0=日...6=六
+  const offset = day === 0 ? -6 : 1 - day; // 往回抓到週一
+  d.setDate(d.getDate() + offset);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function getWeekDays(weekStart) {
+  const d = new Date(weekStart + 'T00:00:00');
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const dd = new Date(d);
+    dd.setDate(d.getDate() + i);
+    days.push(`${dd.getFullYear()}-${String(dd.getMonth()+1).padStart(2,'0')}-${String(dd.getDate()).padStart(2,'0')}`);
+  }
+  return days;
+}
+function changeScheduleWeek(delta) {
+  const d = new Date(state.scheduleWeekStart + 'T00:00:00');
+  d.setDate(d.getDate() + delta * 7);
+  state.scheduleWeekStart = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  render();
+}
+function goToCurrentWeek() {
+  state.scheduleWeekStart = getWeekStart(todayStr());
+  render();
+}
+function formatWeekRangeLabel(days) {
+  const a = new Date(days[0] + 'T00:00:00');
+  const b = new Date(days[6] + 'T00:00:00');
+  if (a.getMonth() === b.getMonth()) {
+    return `${a.getMonth()+1} 月 ${a.getDate()}–${b.getDate()} 日`;
+  }
+  return `${a.getMonth()+1}/${a.getDate()} – ${b.getMonth()+1}/${b.getDate()}`;
+}
+
 // ---- 自動幫學生找下一個雙方都可以的時段 ----
 const WEEKDAY_NAMES = ['日','一','二','三','四','五','六'];
 function timeToMinutes(t) {
@@ -596,7 +658,7 @@ function findCandidateSlots(student, limit) {
     const windows = avail.filter(w => w.day === weekday);
     for (const w of windows) {
       let cursor = timeToMinutes(w.start);
-      const endMinutes = timeToMinutes(w.end);
+      const endMinutes = w.end ? timeToMinutes(w.end) : 23 * 60; // 沒填結束時間就當作到晚上 11 點都行
       while (cursor + 60 <= endMinutes) {
         if (!(offset === 0 && cursor <= nowMinutes)) {
           const timeStr = `${String(Math.floor(cursor/60)).padStart(2,'0')}:${String(cursor%60).padStart(2,'0')}`;
@@ -1649,6 +1711,41 @@ function studentScheduleCardHtml(student) {
   </div>`;
 }
 
+function renderWeekCalendar() {
+  const days = getWeekDays(state.scheduleWeekStart);
+  const today = todayStr();
+  const weekdayNames = ['一','二','三','四','五','六','日'];
+  return `
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <button onclick="changeScheduleWeek(-1)" class="icon-btn">${ic('chevronLeft',20)}</button>
+      <div style="text-align:center;">
+        <div class="font-display" style="font-size:15px;font-weight:700;">${formatWeekRangeLabel(days)}</div>
+        ${state.scheduleWeekStart !== getWeekStart(today) ? `<button onclick="goToCurrentWeek()" class="btn-text" style="padding:2px 0;font-size:12px;">回到本週</button>` : ''}
+      </div>
+      <button onclick="changeScheduleWeek(1)" class="icon-btn" style="transform:scaleX(-1);">${ic('chevronLeft',20)}</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;margin-top:10px;">
+      ${days.map((date, i) => {
+        const items = state.schedule.filter(s => s['日期'] === date).sort((a,b) => (a['時間']||'').localeCompare(b['時間']||''));
+        const isToday = date === today;
+        const shown = items.slice(0, 3);
+        const extra = items.length - shown.length;
+        return `
+        <div style="min-height:78px;border-radius:8px;border:1px solid ${isToday?'#159C93':'#E6EEEC'};background:${isToday?'#E7F7F5':'#fff'};padding:3px 2px;display:flex;flex-direction:column;gap:2px;overflow:hidden;min-width:0;">
+          <div style="font-size:10px;text-align:center;color:${isToday?'#159C93':'#9BB5B2'};font-weight:${isToday?'700':'400'};">${weekdayNames[i]} ${parseInt(date.slice(8,10),10)}</div>
+          ${shown.map(item => {
+            const c = getStudentColor(item['學生姓名']);
+            const label = item['學生姓名'] || '不可用';
+            return `<div style="background:${c.bg};color:${c.text};font-size:9px;line-height:1.35;padding:1px 2px;border-radius:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">${esc(label)}</div>`;
+          }).join('')}
+          ${extra > 0 ? `<div style="font-size:9px;color:#9BB5B2;text-align:center;">+${extra}</div>` : ''}
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+}
+
 function renderSchedule() {
   const gyms = Array.from(new Set(state.roster.map(s => s.gym).filter(Boolean)));
   const filteredRoster = state.scheduleGymFilter
@@ -1657,7 +1754,9 @@ function renderSchedule() {
 
   return `
   <div class="content">
-    <div class="card">
+    ${renderWeekCalendar()}
+
+    <div class="card" style="margin-top:16px;">
       <h3 class="card-title">安排上課</h3>
       <div class="field">
         <div class="field-label">${ic('users',14)} 學生</div>
@@ -1757,18 +1856,18 @@ function renderSettings() {
       </div>
       <div class="field">
         <div class="field-label">可上課時段（選填，用來自動排下次上課時間）</div>
-        <div class="row2" style="grid-template-columns:1fr 1fr 1fr;margin-bottom:8px;">
-          <select onchange="state.newAvailDraft.day=this.value;">
-            ${WEEKDAY_NAMES.map((w,i) => `<option value="${i}" ${String(state.newAvailDraft.day)===String(i)?'selected':''}>週${w}</option>`).join('')}
-          </select>
-          <input type="time" value="${esc(state.newAvailDraft.start)}" oninput="state.newAvailDraft.start=this.value;" />
-          <input type="time" value="${esc(state.newAvailDraft.end)}" oninput="state.newAvailDraft.end=this.value;" />
+        <div class="chip-row" style="margin-bottom:8px;">
+          ${WEEKDAY_NAMES.map((w,i) => `<button onclick="toggleNewAvailDay(${i})" class="chip-sm" style="${state.newAvailDraft.days.includes(i)?'background:#159C93;color:#fff;':''}">週${w}</button>`).join('')}
+        </div>
+        <div class="row2" style="margin-bottom:8px;">
+          <input type="time" placeholder="開始時間" value="${esc(state.newAvailDraft.start)}" oninput="state.newAvailDraft.start=this.value;" />
+          <input type="time" placeholder="結束（留空＝之後都行）" value="${esc(state.newAvailDraft.end)}" oninput="state.newAvailDraft.end=this.value;" />
         </div>
         <button onclick="addNewAvailWindow()" class="btn-secondary" style="width:100%;justify-content:center;margin-bottom:${state.newStudent.availability.length?'8px':'0'};">${ic('plus',16)}新增時段</button>
-        ${state.newStudent.availability.map((w,i) => `
+        ${groupAvailability(state.newStudent.availability).map(g => `
           <div style="display:flex;align-items:center;gap:8px;padding:4px 0;">
-            <div style="flex:1;font-size:13px;color:#6E8C89;">週${WEEKDAY_NAMES[w.day]} ${w.start}–${w.end}</div>
-            <button onclick="removeNewAvailWindow(${i})" class="icon-btn">${ic('x',14)}</button>
+            <div style="flex:1;font-size:13px;color:#6E8C89;">週${g.days.map(d=>WEEKDAY_NAMES[d]).join('')} ${g.start}${g.end ? '–'+g.end : ' 之後'}</div>
+            <button onclick='removeNewAvailGroup("${g.start}","${g.end}",${JSON.stringify(g.days)})' class="icon-btn">${ic('x',14)}</button>
           </div>
         `).join('')}
       </div>
@@ -1808,18 +1907,18 @@ function renderSettings() {
             </div>
             <div class="field">
               <div class="field-label">可上課時段（選填，用來自動排下次上課時間）</div>
-              <div class="row2" style="grid-template-columns:1fr 1fr 1fr;margin-bottom:8px;">
-                <select onchange="state.editAvailDraft.day=this.value;">
-                  ${WEEKDAY_NAMES.map((w,i) => `<option value="${i}" ${String(state.editAvailDraft.day)===String(i)?'selected':''}>週${w}</option>`).join('')}
-                </select>
-                <input type="time" value="${esc(state.editAvailDraft.start)}" oninput="state.editAvailDraft.start=this.value;" />
-                <input type="time" value="${esc(state.editAvailDraft.end)}" oninput="state.editAvailDraft.end=this.value;" />
+              <div class="chip-row" style="margin-bottom:8px;">
+                ${WEEKDAY_NAMES.map((w,i) => `<button onclick="toggleEditAvailDay(${i})" class="chip-sm" style="${state.editAvailDraft.days.includes(i)?'background:#159C93;color:#fff;':''}">週${w}</button>`).join('')}
+              </div>
+              <div class="row2" style="margin-bottom:8px;">
+                <input type="time" placeholder="開始時間" value="${esc(state.editAvailDraft.start)}" oninput="state.editAvailDraft.start=this.value;" />
+                <input type="time" placeholder="結束（留空＝之後都行）" value="${esc(state.editAvailDraft.end)}" oninput="state.editAvailDraft.end=this.value;" />
               </div>
               <button onclick="addEditAvailWindow()" class="btn-secondary" style="width:100%;justify-content:center;margin-bottom:${state.studentEditDraft.availability.length?'8px':'0'};">${ic('plus',16)}新增時段</button>
-              ${state.studentEditDraft.availability.map((w,i) => `
+              ${groupAvailability(state.studentEditDraft.availability).map(g => `
                 <div style="display:flex;align-items:center;gap:8px;padding:4px 0;">
-                  <div style="flex:1;font-size:13px;color:#6E8C89;">週${WEEKDAY_NAMES[w.day]} ${w.start}–${w.end}</div>
-                  <button onclick="removeEditAvailWindow(${i})" class="icon-btn">${ic('x',14)}</button>
+                  <div style="flex:1;font-size:13px;color:#6E8C89;">週${g.days.map(d=>WEEKDAY_NAMES[d]).join('')} ${g.start}${g.end ? '–'+g.end : ' 之後'}</div>
+                  <button onclick='removeEditAvailGroup("${g.start}","${g.end}",${JSON.stringify(g.days)})' class="icon-btn">${ic('x',14)}</button>
                 </div>
               `).join('')}
             </div>
