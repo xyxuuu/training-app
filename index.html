@@ -330,6 +330,7 @@ const state = {
   dateEditValue: '',
   copyPanelOpen: false,
   copyPanelDate: '',
+  copyPanelStudent: '',
   scheduleForm: { student: '', date: todayStr(), time: '', notes: '' },
   scheduleGymFilter: '',
   scheduleWeekStart: getWeekStart(todayStr()),
@@ -875,47 +876,54 @@ async function saveSessionDate(student, oldDate) {
   }
 }
 
-function toggleCopyPanel(currentDate) {
+function toggleCopyPanel(currentDate, currentStudent) {
   state.copyPanelOpen = !state.copyPanelOpen;
   state.copyPanelDate = currentDate;
+  if (currentStudent) state.copyPanelStudent = currentStudent;
   state.dateEditOpen = false;
   render();
 }
 async function confirmCopySession(student, date) {
+  const targetStudent = state.copyPanelStudent || student;
   const targetDate = state.copyPanelDate;
   if (!targetDate) { showToast('請選要複製到哪一天'); return; }
+  if (!targetStudent) { showToast('請選要複製給哪位學生'); return; }
   const exercises = getOrderedSessionExercises(student, date);
   if (exercises.length === 0) return;
   state.copyPanelOpen = false;
   showToast('複製中…');
   render();
-  let order = 0;
-  for (const ex of exercises) {
-    order++;
-    const payload = {
-      action: 'add', studentName: student, date: targetDate,
-      purpose: ex['訓練目的'] || '', sessionNote: '', exercise: ex['動作名稱'] || '',
-      order, sets: ex['組數'] || '', reps: ex['次數'] || '', weight: ex['重量'] || '',
-      duration: ex['秒數'] || '', notes: '',
-    };
-    try {
-      const res = await fetch(state.sheetUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (data.status === 'ok') {
+  const items = exercises.map((ex, i) => ({
+    studentName: targetStudent, date: targetDate,
+    purpose: ex['訓練目的'] || '', sessionNote: '', exercise: ex['動作名稱'] || '',
+    order: i + 1, sets: ex['組數'] || '', reps: ex['次數'] || '', weight: ex['重量'] || '',
+    duration: ex['秒數'] || '', notes: '',
+  }));
+  try {
+    const res = await fetch(state.sheetUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'bulkAdd', items }),
+    });
+    const data = await res.json();
+    if (data.status === 'ok') {
+      data.ids.forEach((id, i) => {
+        const it = items[i];
         state.rows.push({
-          ID: data.id, 學生姓名: student, 日期: targetDate, 訓練目的: payload.purpose,
-          本堂備註: '', 動作名稱: payload.exercise, 順序: order, 組數: payload.sets,
-          次數: payload.reps, 重量: payload.weight, 秒數: payload.duration, 備注: '',
-          課後檢討: '', 建立時間: new Date().toISOString(),
+          ID: id, 學生姓名: it.studentName, 日期: it.date, 訓練目的: it.purpose,
+          本堂備註: '', 動作名稱: it.exercise, 順序: it.order, 組數: it.sets,
+          次數: it.reps, 重量: it.weight, 秒數: it.duration, 備注: '', 課後檢討: '',
+          建立時間: new Date().toISOString(),
         });
-      }
-    } catch (e) {}
+      });
+      showToast(`已複製給 ${targetStudent}（${fmtDate(targetDate)}）`);
+    } else {
+      showToast('複製失敗，請確認 Apps Script 是否為最新版');
+    }
+  } catch (e) {
+    showToast('連線失敗');
   }
-  showToast(`已複製到 ${fmtDate(targetDate)}`);
+  render();
   render();
 }
 
@@ -1525,11 +1533,15 @@ function renderHistory() {
       <button onclick="jumpToSession('${s.key.replace(/'/g,"&#39;")}')" class="btn-primary" style="margin-top:12px;">
         ${ic('plus',18)}在這堂繼續新增動作
       </button>
-      <button onclick="toggleCopyPanel('${todayStr()}')" class="btn-secondary" style="width:100%;justify-content:center;margin-top:10px;">
-        ${ic('copy',16)}複製這堂到其他天
+      <button onclick="toggleCopyPanel('${todayStr()}', '${s.student.replace(/'/g,"&#39;")}')" class="btn-secondary" style="width:100%;justify-content:center;margin-top:10px;">
+        ${ic('copy',16)}複製這堂到其他天／其他學生
       </button>
       ${state.copyPanelOpen ? `
       <div class="card" style="margin-top:10px;">
+        <div class="field-label">複製給哪位學生？</div>
+        <div class="chip-row" style="margin:6px 0 12px;">
+          ${state.roster.map(r => `<button onclick="state.copyPanelStudent='${esc(r.name).replace(/'/g,"&#39;")}';render();" class="chip ${state.copyPanelStudent===r.name?'selected':''}">${esc(r.name)}</button>`).join('')}
+        </div>
         <div class="field-label">複製到哪一天？</div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px;">
           <input type="date" value="${esc(state.copyPanelDate)}" onchange="state.copyPanelDate=this.value;" style="width:auto;" />
